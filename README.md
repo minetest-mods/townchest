@@ -1,6 +1,8 @@
-# Townchest
+# TownChest
 
 A minetest mod contains a chest with building definitions. The chest can spawn a NPC that does build the building for you.
+
+![Screenshot](https://raw.github.com/bell07/minetest-townchest/master/screenshot.png)
 
 ## Features
 
