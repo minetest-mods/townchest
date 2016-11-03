@@ -1,4 +1,5 @@
 local dprint = townchest.dprint --debug
+local smartfs = townchest.smartfs
 
 local preparing_plan_chunk = 10000
 
@@ -35,21 +36,37 @@ local __create = function(pos)
 end
 
 --------------------------------------
--- set_specwidget - set formspec to specific widget
+-- set_form - set formspec to specific widget
 --------------------------------------
-local __set_specwidget = function(this,specname)
-	if not this.specwidget then
-		this.specwidget = townchest.specwidgets.new(this)
+local __set_form = function(this, formname)
+
+	local params = {}
+	if formname = "file_open" then
+		params.infotext = "please select a building"
+	elseif formname = "build_status" then
+		params.infotext = "Nodes in plan: "..this.plan.building_size
+		params.relative = this.plan.relative
+	else
+		params.infotext = this.infotext
 	end
-	local info = minetest.deserialize(this.meta:get_string("specwidget")) --get add info
+	smartfs:__call(formname):attach_nodemeta(this.pos, nil, params)
+
+	if this.infotext then
+		this.meta:set_string("infotext", this.infotext)
+	else
+		this.meta:set_string("infotext", "")
+	end
+--[[	local info = minetest.deserialize(this.meta:get_string("specwidget")) --get add info
 	if info then --dont overwrite {} from new
 		this.specwidget.info = info
 	end
 
 	this.meta:set_string("formspec", this.specwidget:get_spec(specname))            --swap page
 	this.meta:set_string("specwidget", minetest.serialize(this.specwidget.info))    --set add info
+]]--
 end
 
+--[[
 --------------------------------------
 -- set_specwidget - set formspec to specific widget actions
 --------------------------------------
@@ -74,7 +91,7 @@ local __set_specwidget_receive_fields = function(this, pos, formname, fields, se
 
 	return ret_fields
 end
-
+]]--
 
 --------------------------------------
 -- read plan from file in chunk
@@ -98,8 +115,8 @@ local __prepare_building_plan_chain = function(this, we,startpos)
 
 		if i % preparing_plan_chunk == 0 then --report and restart plan chain each 1000 node
 			dprint("next processing chunk")
-			this.statusmessage = "Reading node "..i.." of "..#we
-			this:set_specwidget("status")
+			this.infotext = "Reading node "..i.." of "..#we
+			this:set_form("status")
 			-- save current state
 
 			minetest.after(0.5, this.prepare_building_plan_chain, this, we, i+1 ) --start next file processing chain
@@ -118,7 +135,7 @@ local __prepare_building_plan_chain = function(this, we,startpos)
 		this.restore_started = nil
 	end
 
-	this:set_specwidget("build_status")
+	this:set_form("build_status")
 	 -- TODO: maybe different formspec for building status (if started) and customizing
 end
 
@@ -126,8 +143,8 @@ end
 -- mark file reading as the next chest task
 --------------------------------------
 local __prepare_building_plan = function(this, filename)
-	this.statusmessage = "Reading file "..filename
-	this:set_specwidget("status")
+	this.infotext = "Reading file "..filename
+	this:set_form("status")
 
 -- create the info object if not exisits
 	if not this.info then
@@ -144,11 +161,11 @@ local __prepare_building_plan = function(this, filename)
 -- check if file could be read
 	local we = townchest.files.readfile(this.info.filename)
 	if not we or #we == 0 then
-		this.statusmessage = "No building found in ".. filename
-		this:set_specwidget("status")
+		this.infotext = "No building found in ".. filename
+		this:set_form("status")
 		this.info.filename = nil
 		this.meta:set_string("chestinfo", minetest.serialize(this.info))
-		minetest.after(3, this.set_specwidget, this, "select_file") --back to file selection
+--		minetest.after(3, this.set_specwidget, this, "select_file") --back to file selection (not needed with smarfts
 		return
 	end
 	--start first processing chunk
@@ -200,11 +217,11 @@ local __instant_build = function(this)
 		minetest.forceload_free_block(this.plan:get_world_pos(startingnode[1]))
 	end
 
-	this:set_specwidget("build_status") -- building status
+	this:set_form("build_status") -- building status
 
 	if this.plan.building_size > 0 then --report and restart next plan chain
 		dprint("next building chunk")
-		this.statusmessage = "Nodes left to build "..this.plan.building_size
+		this.infotext = "Nodes left to build "..this.plan.building_size
 		minetest.after(1, this.instant_build, this ) --start next file processing chain
 	else
 		this.instantbuild = nil --disable instant build
@@ -213,6 +230,7 @@ end
 
 
 local __restore = function(this)
+--[[
 	local chestinfo = minetest.deserialize(this.meta:get_string("chestinfo")) --get add info
 	if not chestinfo then
 		dprint("no chestinfo - asume the chest is removed")
@@ -226,8 +244,9 @@ local __restore = function(this)
 		end
 		this:prepare_building_plan(chestinfo.filename)
 	elseif not chestinfo.filename then
-		this:set_specwidget("select_file")
+		this:set_specwidget("file_open")
 	end
+]]--
 end
 
 --------------------------------------
@@ -246,11 +265,10 @@ townchest.chest = {
 townchest.chest.new = function()
 	local this = {}
 	--attributes
-	this.statusmessage = nil --used in spec_status_form  to display short status
+	this.infotext = nil --used in spec_status_form  to display short status
 	
 	--methods
-	this.set_specwidget = __set_specwidget
-	this.set_specwidget_receive_fields = __set_specwidget_receive_fields
+	this.set_form = __set_form -- wrapper around smarfts():attach
 	this.prepare_building_plan = __prepare_building_plan
 --	this.do_cheststep = __do_cheststep
 	this.prepare_building_plan_chain = __prepare_building_plan_chain

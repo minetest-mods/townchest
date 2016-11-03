@@ -10,12 +10,14 @@ local dprint = function(...)
 end
 townchest.dprint = dprint
 
+-- UI tools/ formspec
+dofile(townchest.modpath.."/".."smartfs.lua")
+dofile(townchest.modpath.."/".."smartfs-forms.lua")
+--dofile(townchest.modpath.."/".."specwidgets.lua")
+local smartfs = townchest.smartfs
 
 -- The Chest
 dofile(townchest.modpath.."/".."chest.lua")
-
--- UI tools/ formspec
-dofile(townchest.modpath.."/".."specwidgets.lua")
 
 -- Reading building files (WorldEdit)
 dofile(townchest.modpath.."/".."files.lua")
@@ -40,19 +42,11 @@ end
 ]]--
 
 -----------------------------------------------
--- on_receive_fields - called when a chest button is submitted
------------------------------------------------
-local __on_receive_fields = function(pos, formname, fields, sender)
-	local chest = townchest.chest.get(pos)
-	chest:set_specwidget_receive_fields(pos, formname, fields, sender)
-end
-
------------------------------------------------
 -- on_construct - if the chest is placed
 -----------------------------------------------
 local __on_construct = function(pos)
 	local chest = townchest.chest.create(pos) --create new chest utils instance
-	chest:set_specwidget("select_file")       -- set formspec to "select file"
+	chest:set_form("file_open")
 end
 
 -----------------------------------------------
@@ -122,7 +116,7 @@ minetest.register_node("townchest:chest", {
 	legacy_facedir_simple = true,
 	sounds = default.node_sound_wood_defaults(),
 	on_construct = __on_construct,
-	on_receive_fields = __on_receive_fields,
+	on_receive_fields = smartfs.nodemeta_on_receive_fields,
 	after_dig_node = __on_destruct,
 	on_punch = __on_punch,
 	on_metadata_inventory_put = __on_metadata_inventory_put,
