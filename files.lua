@@ -13,7 +13,8 @@ local __get = function()
 	local files = {}
 	if os.getenv('HOME')~=nil then
 		dprint("use GNU tools to get files")
-		files = io.popen('ls -a "'..townchest.modpath..'/buildings/"'):lines() -- linux/mac native "ls -a"
+---		files = io.popen('ls -a "'..townchest.modpath..'/buildings/"'):lines() -- linux/mac native "ls -a"
+		files = io.popen('cd "'..townchest.modpath..'/buildings/"; find * -type f'):lines() -- linux/mac native "find"
 	else
 		dprint("use DOS to get files")
 		files = io.popen('dir "'..townchest.modpath..'\\buildings\\*.*" /b'):lines() --windows native "dir /b"

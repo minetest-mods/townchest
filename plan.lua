@@ -1,4 +1,4 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
 
 local __add_node = function(this,node)
 	-- add to the full list
@@ -71,7 +71,6 @@ local __prepare = function(this)
 		end
 	end
 	dprint("flatting plan done")
-	
 end
 
 

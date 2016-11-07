@@ -1,4 +1,4 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
 
 local _c_free_item = "default:cloud"
 

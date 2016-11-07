@@ -60,14 +60,15 @@ end
 
 local __select_chest = function(this)
 	-- do nothing if the chest not ready
-	if not this.data.chestpos or not this.chest or not this.chest.started or 
-	   not townchest.chest.list[this.data.chestpos.x..","..this.data.chestpos.y..","..this.data.chestpos.z] then
-	
+	if not this.data.chestpos
+			or not townchest.chest.list[this.data.chestpos.x..","..this.data.chestpos.y..","..this.data.chestpos.z] --chest position not valid
+			or not this.chest
+			or not this.chest:npc_build_allowed() then --chest buid not ready
+
 		local npcpos = this.object:getpos()
 		local selectedchest = nil
 		for key, chest in pairs(townchest.chest.list) do
-			if (not selectedchest or vector.distance(npcpos, chest.pos) < vector.distance(npcpos, selectedchest.pos)) and 
-			    chest.started then
+			if (not selectedchest or vector.distance(npcpos, chest.pos) < vector.distance(npcpos, selectedchest.pos)) and chest:npc_build_allowed() then
 				selectedchest = chest
 			end
 		end
@@ -250,7 +251,7 @@ local __on_step = function(this, dtime)
 
 		if not this.chest.plan or this.chest.plan.building_size == 0 then
 			dprint("building done, disable them")
-			this.chest.started = nil
+			this.chest.info.npc_build = nil
 			return
 		end
 
@@ -279,8 +280,8 @@ local __on_step = function(this, dtime)
 				minetest.env:get_meta(this.targetnode.pos):from_table(this.targetnode.meta)
 			end
 			this.chest.plan:set_node_processed(this.targetnode)
+			this.chest:update_statistics()
 		end
-		this.chest:set_specwidget("build_status")
 	end
 
 	-- walk to target destination

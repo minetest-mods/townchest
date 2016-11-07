@@ -8,12 +8,15 @@ local dprint = function(...)
 -- debug print. Comment out the next line if you don't need debug out
 --	print(unpack(arg))
 end
+local dprint_off = function(...)
+end
 townchest.dprint = dprint
+townchest.dprint_off = dprint_off
 
 -- UI tools/ formspec
 dofile(townchest.modpath.."/".."smartfs.lua")
 dofile(townchest.modpath.."/".."smartfs-forms.lua")
---dofile(townchest.modpath.."/".."specwidgets.lua")
+
 local smartfs = townchest.smartfs
 
 -- The Chest
@@ -31,15 +34,16 @@ dofile(townchest.modpath.."/".."plan.lua")
 -- NPC's
 dofile(townchest.modpath.."/".."npc.lua")
 
---[[
+
 -----------------------------------------------
 -- __cheststep - triggered building step
 -----------------------------------------------
+--[[
 local __cheststep = function(pos)
 	local chest = townchest.chest.get(pos)
 	chest:do_cheststep()
 end
-]]--
+]]
 
 -----------------------------------------------
 -- on_construct - if the chest is placed
@@ -116,7 +120,11 @@ minetest.register_node("townchest:chest", {
 	legacy_facedir_simple = true,
 	sounds = default.node_sound_wood_defaults(),
 	on_construct = __on_construct,
-	on_receive_fields = smartfs.nodemeta_on_receive_fields,
+	on_receive_fields = function(pos, formname, fields, sender)
+		local chest = townchest.chest.get(pos)
+		smartfs.nodemeta_on_receive_fields(pos, formname, fields, sender)
+		chest.meta:set_string("chestinfo", minetest.serialize(chest.info)) --save chest data
+	end,
 	after_dig_node = __on_destruct,
 	on_punch = __on_punch,
 	on_metadata_inventory_put = __on_metadata_inventory_put,
@@ -131,12 +139,11 @@ minetest.register_node("townchest:chest", {
 -----------------------------------------------
 minetest.register_abm({
 	nodenames = {"townchest:chest"},
-	interval = 0.1, --TODO: 0.5
+	interval = 1,
 	chance = 1,
 	action = __cheststep,
 })
-]]--
-
+]]
 
 -----------------------------------------------
 -- register_lbm - restore all chestinfo

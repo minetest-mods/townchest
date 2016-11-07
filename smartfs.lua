@@ -10,11 +10,11 @@
 local currentmod = minetest.get_current_modname() -- mod the file was loaded from
 local envroot = nil
 
-if not currentmod or currentmod == "" or --not minetest or something hacky
+if not currentmod or --not minetest or something hacky
        currentmod == "smartfs" then      -- or loaded trough smartfs mod
 	envroot = _G                         -- populate global
 else
-	if not _G[currentmod] then
+	if not rawget(_G,currentmod) then
 		_G[currentmod] = {}
 	end
 	envroot = _G[currentmod]
@@ -78,13 +78,9 @@ function smartfs.dynamic(name,player)
 		print("SmartFS - (Warning) On the fly forms are being used. May cause bad things to happen")
 	end
 
-	-- obsolete api compatibility to previous versions
-	if type(player) == "string" then
-		player = minetest.get_player_by_name(player)
-	end -- obsolete api compatibility end
 	local state = smartfs._makeState_({name=name},player,nil,false)
 	state.show = state._show_
-	smartfs.opened[player:get_player_name()] = state
+	smartfs.opened[player] = state
 	return state
 end
 
@@ -150,7 +146,7 @@ end
 -- Form Interface [linked to form:show()] - Attach form to a player directly
 ------------------------------------------------------
 function smartfs._show_(form, name, params, is_inv)
-	local state = smartfs._makeState_(form, minetest.get_player_by_name(name), params, is_inv)
+	local state = smartfs._makeState_(form, name, params, is_inv)
 	state.show = state._show_
 	if form._reg(state)~=false then
 		if not is_inv then
@@ -166,18 +162,10 @@ end
 ------------------------------------------------------
 -- Form Interface [linked to form:show()] - Attach form to node meta
 ------------------------------------------------------
-function smartfs._attach_nodemeta_(form, nodepos, placer, params_new)
-	local meta = minetest.env:get_meta(nodepos)
-	local params = minetest.deserialize(meta:get_string("smartfs_param")) -- param always persist between calls
-	if params_new then
-		for k,v in pairs(params_new) do
-			params[k] = v
-		end
-	end
-	local state = smartfs._makeState_(form, nil, params, nil, nodepos) --no attached user and no inventory integration
-	state:setparam("node_placer", placer)
+function smartfs._attach_nodemeta_(form, nodepos, placer, params)
+	local state = smartfs._makeState_(form, nil, params, nil, nodepos) --no attached user, no params, no inventory integration
 	if form._reg(state) then
-		state:_attach_nodemeta_()
+		state:_show_()
 	end
 	return state
 end
@@ -186,10 +174,9 @@ end
 ------------------------------------------------------
 -- Minetest Interface - Receive data from player in case of nodemeta attachment (to be used in minetest.register_node methods)
 ------------------------------------------------------
-function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender)
-
+function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender, params)
 	-- get form info and check if it's a smartfs one
-	local meta = minetest.env:get_meta(nodepos)
+	local meta = minetest.get_meta(nodepos)
 	local nodeform = meta:get_string("smartfs_name")
 	if not nodeform then -- execute only if it is smartfs form
 		print("SmartFS - (Warning) smartfs.nodemeta_on_receive_fields for node without smarfs data")
@@ -198,12 +185,11 @@ function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender)
 
 	-- get the currentsmartfs state
 	local opened_id = minetest.pos_to_string(nodepos)
-	local state = nil
+	local state
 	local form = smartfs:__call(nodeform)
 	if not smartfs.opened[opened_id] or      --if opened first time
 	       smartfs.opened[opened_id].def.name ~= nodeform then --or form is changed
-		local params = minetest.deserialize(meta:get_string("smartfs_param")) -- param always persist between calls
-		state = smartfs._makeState_(form, sender, params, nil, nodepos)
+		state = smartfs._makeState_(form, nil, params, nil, nodepos)
 		smartfs.opened[opened_id] = state
 		form._reg(state)
 	else
@@ -211,19 +197,17 @@ function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender)
 	end
 
 	-- Set current sender check for multiple users on node
-	state.players:connect(sender)
+	local name = sender:get_player_name()
+	state.players:connect(name)
 
 	-- take the input
-	state:_sfs_recieve_(sender, fields)
+	state:_sfs_recieve_(name, fields)
 
-	--persist parameter for later usage
-	meta:set_string("smartfs_param", minetest.serialize(state.param))
-
+	--update formspec on node to a initial one for the next usage
 	if not state.players:get_first() then
-		--update formspec on node to a initial one for the next usage (respecting param persistence)
 		state._ele = {} --reset the form
 		if form._reg(state) then --regen the form
-			state:_attach_nodemeta_() --write form to node
+			state:_show_() --write form to node
 		end
 		smartfs.opened[opened_id] = nil -- remove the old state
 	end
@@ -237,13 +221,13 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if smartfs.opened[name] and smartfs.opened[name].location.type == "player" then
 		if smartfs.opened[name].def.name == formname then
 			local state = smartfs.opened[name]
-			return state:_sfs_recieve_(player,fields)
+			return state:_sfs_recieve_(name,fields)
 		else
 			smartfs.opened[name] = nil
 		end
 	elseif smartfs.inv[name] and smartfs.inv[name].location.type == "inventory" then
 		local state = smartfs.inv[name]
-		state:_sfs_recieve_(player,fields)
+		state:_sfs_recieve_(name,fields)
 	end
 	return false
 end)
@@ -264,22 +248,19 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 	-- State - players handler
 	------------------------------------------------------
 	-- Create object for monitoring of connected players. If no one connected the state can be free'd
-	local _make_players_ = function(form, newplayer)
+	local function _make_players_(form, newplayer)
 		local self = {}
 		self._list = {} -- players list
-		self.connect = function(self,player)
-			if player and player:get_player_name() then
-				self._list[player:get_player_name()] = player
-			end
+
+		function self.connect(self, player)
+			self._list[player] = player
 		end
 
-		self.disconnect = function(self,player)
-			if self._list[player:get_player_name()] then
-				self._list[player:get_player_name()] = nil
-			end
+		function self.disconnect(self, player)
+			self._list[player] = nil
 		end
 
-		self.get_first = function(self) --to check if any connected
+		function self.get_first(self) --to check if any connected
 			return next(self._list)
 		end
 		if newplayer then
@@ -288,18 +269,11 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 		return self
 	end
 
-	-- compatibility to older api
-	local _make_obsolete_player_ = function(player)
-		if player then
-			return player:get_player_name()
-		end
-	end
-
 	------------------------------------------------------
 	-- State - location handler
 	------------------------------------------------------
 	-- create object to handle formspec location
-	local _make_location_ = function(form, newplayer, params, is_inv, nodepos)
+	local function _make_location_(form, newplayer, params, is_inv, nodepos)
 		local self = {}
 		self.rootState = self --by default. overriden in case of view
 		if form.root and form.root.location then --the parent "form" is a state
@@ -334,28 +308,27 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 		-- State - root window state interface. Not used/supportted in views
 		------------------------------------------------------
 		players = _make_players_(form, newplayer),
-		is_inv = is_inv,                            -- obsolete. Please use location.type=="inventory" instead
-		player = _make_obsolete_player_(newplayer), -- obsolete. Please use location.player:get_player_name()
---		close = function(self)
---			self.closed = true
---		end,
+		is_inv = is_inv,    -- obsolete. Please use location.type=="inventory" instead
+		player = newplayer, -- obsolete. Please use location.player:get_player_name()
+		close = function(self)
+			self.closed = true
+		end,
 		_show_ = function(self)
 			if self.location.type == "inventory" then
 				if unified_inventory then
-					unified_inventory.set_inventory_formspec(self.location.player, self.def.name)
+					unified_inventory.set_inventory_formspec(minetest.get_player_by_name(self.location.player), self.def.name)
 				elseif inventory_plus then
-					inventory_plus.set_inventory_formspec(self.location.player, self:_getFS_(true))
+					inventory_plus.set_inventory_formspec(minetest.get_player_by_name(self.location.player), self:_getFS_(true))
 				end
 			elseif self.location.type == "player" then
 				local res = self:_getFS_(true)
-				minetest.show_formspec(self.location.player:get_player_name(), form.name, res)
+				minetest.show_formspec(self.location.player, form.name, res)
+			elseif self.location.type == "nodemeta" then
+				local meta = minetest.get_meta(self.location.pos)
+				local res = self:_getFS_(true)
+				meta:set_string("formspec", res)
+				meta:set_string("smartfs_name", self.def.name)
 			end
-		end,
-		_attach_nodemeta_ = function(self)
-			local meta = minetest.env:get_meta(self.location.pos)
-			local res = self:_getFS_(true)
-			meta:set_string("formspec", res)
-			meta:set_string("smartfs_name", self.def.name)
 		end,
 
 		------------------------------------------------------
@@ -438,21 +411,17 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			-- process onInput hooks
 			self:_sfs_process_oninput_(fields, player)
 
-			--if not (self.closed or fields.quit) then
-			if not fields.quit then
-				if self.location.type == "nodemeta" then
-					self:_attach_nodemeta_()
-				else
-					self:_show_()
-				end
-			else
-		--		really? I was able to close window trough button_exit[]. Disabled for testing
-		--		minetest.show_formspec(name,"","size[5,1]label[0,0;Formspec closing not yet created!]")
+			if not fields.quit and not self.closed then
+				self:_show_()
+			else -- to be closed
 				self.players:disconnect(player)
 				if self.location.type == "player" then
-					smartfs.opened[player:get_player_name()] = nil
+					smartfs.opened[player] = nil
 				end
-				return true
+				if not fields.quit and self.closed then
+					--closed by application (without fields.quit). currently not supported, see: https://github.com/minetest/minetest/pull/4675
+					minetest.show_formspec(player,"","size[5,1]label[0,0;Formspec closing not yet created!]")
+				end
 			end
 			return true
 		end,
@@ -747,7 +716,7 @@ smartfs.element("button",{
 				self:getSizeString()..";"..
 				self.data.img..";"..
 				self:getAbsName()..";"..
-				self.data.value.."]"..
+				minetest.formspec_escape(self.data.value).."]"..
 				self:getBackgroundString()
 		else
 			if self.data.closes then
@@ -755,14 +724,14 @@ smartfs.element("button",{
 					self:getPosString()..";"..
 					self:getSizeString()..";"..
 					self:getAbsName()..";"..
-						self.data.value.."]"..
+						minetest.formspec_escape(self.data.value).."]"..
 						self:getBackgroundString()
 			else
 				return "button["..
 					self:getPosString()..";"..
 					self:getSizeString()..";"..
 					self:getAbsName()..";"..
-					self.data.value.."]"..
+					minetest.formspec_escape(self.data.value).."]"..
 					self:getBackgroundString()
 			end
 		end
@@ -806,7 +775,7 @@ smartfs.element("toggle",{
 			self:getPosString()..";"..
 			self:getSizeString()..";"..
 			self:getAbsName()..";"..
-			self.data.list[self.data.id].."]"..
+			minetest.formspec_escape(self.data.list[self.data.id]).."]"..
 			self:getBackgroundString()
 	end,
 	submit = function(self, field, player)
@@ -836,7 +805,7 @@ smartfs.element("label",{
 	build = function(self)
 		return "label["..
 			self:getPosString()..";"..
-			self.data.value.."]"..
+			minetest.formspec_escape(self.data.value).."]"..
 			self:getBackgroundString()
 	end,
 	setText = function(self,text)
@@ -854,23 +823,23 @@ smartfs.element("field",{
 				self:getPosString()..";"..
 				self:getSizeString()..";"..
 				self:getAbsName()..";"..
-				self.data.label..";"..
-				self.data.value.."]"..
+				minetest.formspec_escape(self.data.label)..";"..
+				minetest.formspec_escape(self.data.value).."]"..
 				self:getBackgroundString()
 		elseif self.data.pwd then
 			return "pwdfield["..
 				self:getPosString()..";"..
 				self:getSizeString()..";"..
 				self:getAbsName()..";"..
-				self.data.label.."]"..
+				minetest.formspec_escape(self.data.label).."]"..
 				self:getBackgroundString()
 		else
 			return "field["..
 				self:getPosString()..";"..
 				self:getSizeString()..";"..
 				self:getAbsName()..";"..
-				self.data.label..";"..
-				self.data.value.."]"..
+				minetest.formspec_escape(self.data.label)..";"..
+				minetest.formspec_escape(self.data.value).."]"..
 				self:getBackgroundString()
 		end
 	end,
@@ -913,7 +882,7 @@ smartfs.element("checkbox",{
 		return "checkbox["..
 			self:getPosString()..";"..
 			self:getAbsName()..";"..
-			self.data.label..";"..
+			minetest.formspec_escape(self.data.label)..";"..
 			self.data.value.."]"..
 			self:getBackgroundString()
 	end,
@@ -992,6 +961,9 @@ smartfs.element("list",{
 		else
 			return nil
 		end
+	end,
+	clearItems = function(self)
+		self.data.items = {}
 	end,
 	popItem = function(self)
 		if not self.data.items then

@@ -10,6 +10,10 @@ local smartfs = townchest.smartfs
 
 
 local _file_open_dialog = function(state)
+
+
+	local chest = townchest.chest.get(state.location.pos)
+
 	state:size(10,7)
 	state:label(0,0,"header","Please select a building")
 -- Listbox
@@ -23,14 +27,13 @@ local _file_open_dialog = function(state)
 	runbutton:onClick(function(self)
 		local file = listbox:getSelectedItem() 
 		if file then
-			local chest = townchest.chest.get(state.location.pos)
 			chest:prepare_building_plan(file)
 		end
 	end)
 	
 	state:button(5,6.5,2,0.5,"Cancel","Cancel", true)
-	return true
 
+	return true --successfull build, update needed
 end
 smartfs.create("file_open", _file_open_dialog)
 
@@ -39,118 +42,99 @@ smartfs.create("file_open", _file_open_dialog)
 -- Status dialog
 -----------------------------------------------
 local _status = function(state)
-	state:size(1,7)
-	state:label(0,0,"info",state:getparam("infotext"))
+	local chest = townchest.chest.get(state.location.pos)
+	if not chest.infotext then
+		print("BUG: no infotext for status dialog!")
+		return false -- no update
+	end
+	state:size(7,1)
+	state:label(0,0,"info",chest.infotext)
+	return true --successfull build, update needed
 end
 smartfs.create("status", _status)
 
 
 
 -----------------------------------------------
--- Customization dialog
+-- Building status dialog
 -----------------------------------------------
 local _build_status = function(state)
-		state:size(12,10)
 
-	local relative = getparam("relative")
-	state:label(1,0.5,"l1","Building "..this.chest.info.filename.." selected")
+	-- connect to chest data
+	local chest = townchest.chest.get(state.location.pos)
+
+	if not chest.plan then
+		print("BUG: no plan in build_status dialog!")
+		return false -- no update
+	end
+	local relative = chest.plan.relative
+
+	-- helper function - disable something if build is in process
+	local function set_processing_visibility(the_element)
+		if chest.info.npc_build or chest.info.instantbuild then
+			the_element:setIsHidden(true)
+		else
+			the_element:setIsHidden(false)
+		end
+	end
+
+	-- create screen
+	state:size(10,5)
+	state:label(1,0.5,"l1","Building "..chest.info.filename.." selected")
 	state:label(1,1.0,"l2","Size: "..(relative.max_x-relative.min_x).." x "..(relative.max_z-relative.min_z))
 	state:label(1,1.5,"l3","Building high: "..(relative.max_y-relative.min_y).."  Ground high: "..(relative.ground_y-relative.min_y))
-	state:label(1,2.0,"l4","Nodes to do: "..this.chest.plan.building_size)
+	state:label(1,2.0,"l4","Nodes to do: "..chest.plan.building_size)
 
---[[
-	local current_task = getparam("current_task")
-	local inst_tg_id = 1 --stopped
-	local inst_npc_id = 1 -- stopped
-	
-	if current_task ==
-]]--
-	state:toggle(1,8,3,0.5,"inst_tg",{"Start instant build","Stop instant build"})
-	state:toggle(5,8,3,0.5,"npc_tg",{"Start NPC build","Stop NPC build"})
+	-- refresh building button
+	local reload_bt = state:button(5,4,3,0.5,"reload_bt", "Reload nodes")
+	reload_bt:onClick(function(self, state, player)
+		chest:prepare_building_plan(chest.info.filename)
+	end)
 
-	local 
+	set_processing_visibility(reload_bt)
 
--- first buttons row
-	if this.chest.instantbuild then
-		formspec = formspec.."button[1,8;3,0.5;stop_instant;Stop instant build]"
+	--Instand build button
+	local inst_tg = state:toggle(1,3,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"})
+	inst_tg:onToggle(function(self, state, player)
+		if self:getId() == 2 then
+			chest.info.instantbuild = true
+			chest:instant_build()
+		else
+			chest.info.instantbuild = nil
+		end
+		chest:persist_info()
+		set_processing_visibility(reload_bt)
+	end)
+	if chest.info.instantbuild then
+		inst_tg:setId(2)
 	else
-		formspec = formspec.."button[1,8;3,0.5;start_instant;Start instant build]"
+		inst_tg:setId(1)
 	end
-	if this.chest.started then
-		formspec = formspec.."button[5,8;3,0.5;stop;Stop NPC build]"
+
+	-- NPC build button
+	local npc_tg = state:toggle(5,3,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
+	npc_tg:onToggle(function(self, state, player)
+		if self:getId() == 2 then
+			chest.info.npc_build = true      --is used by NPC
+		else
+			chest.info.npc_build = nil
+		end
+		set_processing_visibility(reload_bt)
+		chest:persist_info()
+	end)
+	if chest.info.npc_build then
+		npc_tg:setId(2)
 	else
-		formspec = formspec.."button[5,8;3,0.5;start;Start NPC build]"
+		npc_tg:setId(1)
 	end
 
-	
--- second buttons row
-	formspec = formspec.."button[1,9;3,0.5;take_npc;Spawn NPC]"
-	-- reload available if nothing started only
-	if not this.chest.started and not this.chest.instantbuild then
-		formspec = formspec.."button[5,9;3,0.5;reload_file;Reload nodes]"
-	end
-
-	return formspec
-end
-
-
------------------------------------------------
--- Customization dialog
------------------------------------------------
-local _spec_build_status_action = function(this, pos, formname, fields, sender)
-	if fields.start_instant then
-		this.chest.instantbuild = true
-		this.chest:instant_build()
-	elseif fields.stop_instant then
-		this.chest.instantbuild = nil
-
-	elseif fields.take_npc then
+	-- spawn NPC button
+	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
+	spawn_bt:onClick(function(self, state, player)
+		local pos = state.location.pos
 		minetest.add_entity({x=(pos.x+math.random(0,4)-2),y=(pos.y+math.random(0,2)),z=(pos.z+math.random(0,4)-2)}, "townchest:builder")
+	end)
 
-	elseif fields.start then
-		this.chest.started = true      --is used by NPC
-		this.chest.info.started = true --is used by restore
-		this.chest.meta:set_string("chestinfo", minetest.serialize(this.chest.info))
-	elseif fields.stop then
-		this.chest.started = nil
-		this.chest.info.started = nil
-		this.chest.meta:set_string("chestinfo", minetest.serialize(this.chest.info))
-	elseif fields.reload_file then
-		this.chest:prepare_building_plan(this.chest.info.filename)
-	end
+	return true --successfull build, update needed
 end
-
-
-
-local __get_spec = function(this,specname)
-
-	local spec = specname
-	if not spec then
-		spec = this.info.specname
-	end
-	this.info.specname = spec
-
-	if spec == "select_file" then
-		this.receive_fields = _spec_select_file_action --set function
-		return _spec_select_file_form(this)
-	elseif spec == "status" then
-		this.receive_fields = nil
-		return _spec_status_form(this)
-	elseif spec == "build_status" then
-		this.receive_fields = _spec_build_status_action --set function
-		return _spec_build_status_form(this)
-	end
-end
-
-
---------------------------------------
--- object definition / constructor
---------------------------------------
-townchest.specwidgets.new = function(chest) 
-	local this = {}
-	this.info = {} --additional functions
-	this.get_spec = __get_spec
-	this.chest = chest
-	return this
-end
-
+smartfs.create("build_status", _build_status)
