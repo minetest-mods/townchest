@@ -150,9 +150,15 @@ function smartfs._show_(form, name, params, is_inv)
 	state.show = state._show_
 	if form._reg(state)~=false then
 		if not is_inv then
+			if smartfs.opened[name] then -- set maybe previous form to obsolete
+				smartfs.opened[name].obsolete = true
+			end
 			smartfs.opened[name] = state
 			state:_show_()
 		else
+			if smartfs.inv[name] then  -- set maybe previous form to obsolete
+				smartfs.inv[name].obsolete = true
+			end
 			smartfs.inv[name] = state
 		end
 	end
@@ -165,6 +171,10 @@ end
 function smartfs._attach_nodemeta_(form, nodepos, placer, params)
 	local state = smartfs._makeState_(form, nil, params, nil, nodepos) --no attached user, no params, no inventory integration
 	if form._reg(state) then
+		local opened_id = minetest.pos_to_string(nodepos)
+		if smartfs.opened[opened_id] then -- set maybe previous form to obsolete
+			smartfs.opened[opened_id].obsolete = true
+		end
 		state:_show_()
 	end
 	return state
@@ -188,8 +198,12 @@ function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender, p
 	local state
 	local form = smartfs:__call(nodeform)
 	if not smartfs.opened[opened_id] or      --if opened first time
-	       smartfs.opened[opened_id].def.name ~= nodeform then --or form is changed
+			smartfs.opened[opened_id].def.name ~= nodeform or
+			smartfs.opened[opened_id].obsolete then --or form is changed
 		state = smartfs._makeState_(form, nil, params, nil, nodepos)
+		if smartfs.opened[opened_id] then
+			smartfs.opened[opened_id].obsolete = true
+		end
 		smartfs.opened[opened_id] = state
 		form._reg(state)
 	else
@@ -197,14 +211,17 @@ function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender, p
 	end
 
 	-- Set current sender check for multiple users on node
-	local name = sender:get_player_name()
-	state.players:connect(name)
+	local name
+	if sender then
+		name = sender:get_player_name()
+		state.players:connect(name)
+	end
 
 	-- take the input
 	state:_sfs_recieve_(name, fields)
 
 	--update formspec on node to a initial one for the next usage
-	if not state.players:get_first() then
+	if sender and not state.players:get_first() and not state.obsolete then
 		state._ele = {} --reset the form
 		if form._reg(state) then --regen the form
 			state:_show_() --write form to node
@@ -390,7 +407,7 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			if self._onInput then
 				self:_onInput(fields, player)
 			end
-			-- recursive all all onInput hooks on visible views
+			-- recursive all onInput hooks on visible views
 			for elename, eledef in pairs(self._ele) do
 				if eledef.getViewState and not eledef:getIsHidden() then
 					eledef:getViewState():_sfs_process_oninput_(fields, player)
@@ -404,21 +421,22 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			for field,value in pairs(fields) do
 				self:_sfs_recieve_field_(field, value)
 			end
+			-- process onInput hooks
+			self:_sfs_process_oninput_(fields, player)
+
 			-- do actions
 			for field,value in pairs(fields) do
 				self:_sfs_recieve_action_(field, value, player)
 			end
-			-- process onInput hooks
-			self:_sfs_process_oninput_(fields, player)
 
-			if not fields.quit and not self.closed then
+			if not fields.quit and not self.closed and not self.obsolete then
 				self:_show_()
 			else -- to be closed
 				self.players:disconnect(player)
 				if self.location.type == "player" then
 					smartfs.opened[player] = nil
 				end
-				if not fields.quit and self.closed then
+				if not fields.quit and self.closed and not self.obsolete then
 					--closed by application (without fields.quit). currently not supported, see: https://github.com/minetest/minetest/pull/4675
 					minetest.show_formspec(player,"","size[5,1]label[0,0;Formspec closing not yet created!]")
 				end

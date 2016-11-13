@@ -1,4 +1,4 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
 
 --[[
 local __die = function(this)
@@ -112,11 +112,10 @@ local __get_if_buildable = function(this, realpos)
 		orig_node = minetest.get_node(realpos)
 	end
 	
-	if orig_node.name == "ignore" then --not loaded chunk. can be forced by forceload_block before check if buildable
+	if not orig_node or orig_node.name == "ignore" then --not loaded chunk. can be forced by forceload_block before check if buildable
 		dprint("check ignored")
 		return nil
 	end
-
 	if orig_node.name == node.name or orig_node.name == minetest.registered_nodes[node.name].name then 
 		-- right node is at the place. there are no costs to touch them. Check if a touch needed
 		if (node.param2 ~= orig_node.param2 and not (node.param2 == nil and orig_node.param2  == 0)) then
@@ -143,11 +142,39 @@ local __get_if_buildable = function(this, realpos)
 	end
 end
 
+local function prefer_target(npc, t1, t2)
+
+	if not t1 then
+		return t2
+	end
+
+	local npcpos = npc.object:getpos()
+	npcpos.y = npcpos.y - 2.5  -- npc is 1.5 blocks over the work, so we need to be "lower" in calculation
+
+	local prefer_sameitem = 0 --prefer same items in building order
+	if npc.lastnode then
+		if npc.lastnode.name == t1.name then
+			prefer_sameitem = prefer_sameitem + 2
+		end
+		if npc.lastnode.name == t2.name then
+			prefer_sameitem = prefer_sameitem - 2
+		end
+	end
+
+	if (vector.distance(npcpos, t2.pos) + prefer_sameitem) < vector.distance(npcpos, t1.pos) then
+		return t2
+	else
+		return t1
+	end
+
+end
+
 
 local __get_target = function(this)
+
 	local npcpos = this.object:getpos()
 	local plan = this.chest.plan
-	npcpos.y = npcpos.y - 3  -- npc is 1.5 blocks over the work, so we need to be "lower" in calculation
+	npcpos.y = npcpos.y - 2.5  -- npc is 1.5 blocks over the work, so we need to be "lower" in calculation
 	                         -- prefer lower building nodes, so we check the distance to the next 1.5 blocks lower
 	local selectednode
 	
@@ -159,9 +186,7 @@ local __get_target = function(this)
 				local node = __get_if_buildable(this,{x=x,y=y,z=z})
 				if node then
 					node.pos = plan:get_world_pos(node)
-					if not selectednode or vector.distance(npcpos, node.pos) < vector.distance(npcpos, selectednode.pos) then
-						selectednode = node
-					end
+					selectednode = prefer_target(this, selectednode, node)
 				end
 			end
 		end
@@ -181,9 +206,7 @@ local __get_target = function(this)
 			local node = __get_if_buildable(this, plan:get_world_pos(nodeplan))
 			if node then
 				node.pos = plan:get_world_pos(node)
-				if not selectednode or vector.distance(npcpos, node.pos) < vector.distance(npcpos, selectednode.pos) then
-					selectednode = node
-				end
+				selectednode = prefer_target(this, selectednode, node)
 			end
 		end
 	
@@ -204,15 +227,10 @@ local __get_target = function(this)
 			dprint("---check chunk", startingnode[1].x.."/"..startingnode[1].y.."/"..startingnode[1].z)
 			for idx, nodeplan in ipairs(plan:get_nodes_from_chunk(startingnode[1])) do
 				local node_wp = plan:get_world_pos(nodeplan)
---				minetest.forceload_block(node_wp)
---				dprint("---check node (real)", node_wp.x.."/"..node_wp.y.."/"..node_wp.z)
 				local node = __get_if_buildable(this, node_wp)
---				minetest.forceload_free_block(node_wp)
 				if node then
 					node.pos = node_wp
-					if not selectednode or vector.distance(npcpos, node.pos) < vector.distance(npcpos, selectednode.pos) then
-						selectednode = node
-					end
+					selectednode = prefer_target(this, selectednode, node)
 				end
 			end
 		else
@@ -276,6 +294,7 @@ local __on_step = function(this, dtime)
 			--- Place node
 --			minetest.forceload_block(this.targetnode.pos)
 			minetest.env:add_node(this.targetnode.pos, this.targetnode)
+			this.lastnode = this.targetnode
 			if this.targetnode.meta then
 				minetest.env:get_meta(this.targetnode.pos):from_table(this.targetnode.meta)
 			end

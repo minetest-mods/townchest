@@ -2,7 +2,7 @@ local dprint = townchest.dprint_off --debug
 
 local _c_free_item = "default:cloud"
 
--- Fallback nodes replacement of  unknown nodes
+-- Fallback nodes replacement of unknown nodes
 -- Maybe it is beter to use aliases for unknown notes. But anyway
 -- TODO: should be editable in game trough a nice gui, to customize the building before build
 local __map_unknown = function(self)
@@ -87,7 +87,7 @@ end
 -----------------------------------------------
 local __map = function(self)
 
-	local node_chk = minetest.registered_items[self.name]
+	local node_chk = minetest.registered_nodes[self.name]
 
 	if not node_chk then
 		local fallbacknode = self:map_unknown()
@@ -222,8 +222,6 @@ u["doors:door_steel_a_c"] = {name = "doors:hidden" }
 u["doors:door_steel_a_o"] = {name = "doors:hidden" }
 u["doors:door_steel_t_1"] = {name = "doors:hidden" }
 u["doors:door_steel_t_2"] = {name = "doors:hidden" }
-
-
 
 
 local c = {}

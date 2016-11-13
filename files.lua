@@ -1,4 +1,4 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
 
 -- get worldedit parser load_schematic from worldedit mod
 dofile(townchest.modpath.."/".."worldedit-serialization.lua")

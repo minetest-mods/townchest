@@ -1,4 +1,4 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
 local smartfs = townchest.smartfs
 
 local preparing_plan_chunk = 10000
@@ -48,11 +48,15 @@ local __create = function(pos)
 	return this
 end
 
+--------------------------------------
+-- Class attributes
+--------------------------------------
 townchest.chest = {
 	list = {}, -- cached chest list
 	create = __create,
 	get = __get,
 }
+
 
 --------------------------------------
 -- object definition / constructor
@@ -62,7 +66,9 @@ townchest.chest.new = function()
 	--attributes
 	chest.infotext = nil --used in spec_status_form  to display short status
 
-
+	--------------------------------------
+	-- save persistant chest info to the chest metadata
+	--------------------------------------
 	function chest.persist_info(this) -- the read info is in get method
 		this.meta:set_string("chestinfo", minetest.serialize(this.info))
 	end
@@ -96,93 +102,142 @@ townchest.chest.new = function()
 	end
 
 	--------------------------------------
-	-- Take postprocess after prepare building plan
+	-- update informations on formspecs
+	--------------------------------------
+	function chest.update_info(this, formname)
+		this:set_infotext(formname)
+		this:persist_info()
+		smartfs.nodemeta_on_receive_fields(this.pos, formname, {}) -- send no data, but triiger onReceive
+	end
+
+	--------------------------------------
+	-- Create the task that should be managed by chest
+	--------------------------------------
+	function chest.set_rawdata(this, taskname)
+		if taskname == "file" then
+		-- check if file could be read
+			local we = townchest.files.readfile(this.info.filename)
+			if not we or #we == 0 then
+				this.infotext = "No building found in ".. this.info.filename
+				this:set_form("status")
+				this.current_stage = "select"
+				this.info.filename = nil
+				this:persist_info()
+				minetest.after(3, this.set_form, this, "file_open") --back to file selection
+				return
+			end
+			this.rawdata = we
+
+		elseif taskname == "generate" then
+			local we = {}
+			if this.info.genblock.fill == "true" then
+--[[				for x = -math.floor(this.info.genblock.x/2), math.floor(this.info.genblock.x/2) do
+					for y = -1, this.info.genblock.y -2 do -- 1 under the chest
+						for z = -math.floor(this.info.genblock.z/2), math.floor(this.info.genblock.z/2) do
+							table.insert(we, {x=x,y=y,z=z, name = "default:cobble"})
+						end
+					end
+				end
+]]
+				for x = -math.floor(this.info.genblock.x/2), math.floor(this.info.genblock.x/2) do
+					for y = -1, this.info.genblock.y -2 do -- 1 under the chest
+						for z = -math.floor(this.info.genblock.z/2), math.floor(this.info.genblock.z/2) do
+							if x == -math.floor(this.info.genblock.x/2) or x == math.floor(this.info.genblock.x/2) or
+									y == -1 or y == this.info.genblock.y -2 or
+									z == -math.floor(this.info.genblock.z/2) or z == math.floor(this.info.genblock.z/2) then
+								table.insert(we, {x=x,y=y,z=z, name = "default:cobble"})
+							end
+						end
+					end
+				end
+			else
+				table.insert(we, {x=-math.floor(this.info.genblock.x/2),y=0,z=-math.floor(this.info.genblock.z/2), name = "air"})
+				table.insert(we, {x=math.floor(this.info.genblock.x/2),y=this.info.genblock.y -1,z=math.floor(this.info.genblock.z/2), name = "air"})
+			end
+			this.rawdata = we
+		end
+
+		this.info.taskname = taskname
+		this.plan = townchest.plan.new(this)
+		chest:run_async(this.prepare_building_plan_chain)
+	end
+
+
+	--------------------------------------
+	-- Call a task semi-async trough minetest.after()
+	--------------------------------------
+	function chest.run_async(this, func)
+		local function async_call(pos)
+			local chest = townchest.chest.get(pos)
+			this.info = minetest.deserialize(this.meta:get_string("chestinfo")) --get add info
+			if not this.info then -- chest removed during the load, stop processing
+				townchest.chest.list[this.key] = nil
+				return
+			end
+			if func(chest) then --call the next chain / repeat function call
+				chest:run_async(func)
+			end
+		end
+
+		this:persist_info()
+		minetest.after(0.2, async_call, this.pos)
+	end
+
+	--------------------------------------
+	-- Async task: create building plan from rawdata
+	--------------------------------------
+	function chest.prepare_building_plan_chain(this)
+		local chunksize, lastchunk
+		-- go trough all file entries
+		if #this.rawdata > preparing_plan_chunk then
+			chunksize = preparing_plan_chunk
+			lastchunk = true
+		else
+			chunksize = #this.rawdata
+		end
+
+		for i=#this.rawdata, #this.rawdata-chunksize+1, -1 do
+			-- map to the internal node format
+			local wenode = this.rawdata[i]
+			if wenode and wenode.x and wenode.y and wenode.z and wenode.name then
+				this.plan:adjust_flatting_requrement(wenode)
+				local node = townchest.nodes.new(this.rawdata[i]):map() --mapped
+				if node and node.x and node.y and node.z then
+					this.plan:add_node(node)
+				end
+			end
+			this.rawdata[i] = nil
+		end
+
+		if lastchunk then
+			dprint("next processing chunk")
+			this.infotext = "Preparing, nodes left: "..#this.rawdata
+			this:set_form("status")
+			return true --repeat async call
+		else
+			dprint("reading of building done. Save them to the chest metadata")
+			this.infotext = "Reading done, preparing"
+			this:set_form("status")
+			this:run_async(chest.prepare_building_plan_chain_postprocess)
+			return false
+		end
+	end
+
+	--------------------------------------
+	-- Async task: Post-processing of plan preparation
 	--------------------------------------
 	function chest.prepare_building_plan_chain_postprocess(this)
 		this.plan:prepare()
 		this.current_stage = "ready"
 		this:set_form("build_status")
 		this:persist_info()
-		minetest.after(1, this.instant_build, this ) -- check if instant build already active
+		this:run_async(chest.instant_build_chain) --just trigger, there is a check if active
 	end
 
 	--------------------------------------
-	-- read plan from file in chunk
+	-- Async Task: Do a instant build step
 	--------------------------------------
-	function chest.prepare_building_plan_chain(this, we,startpos)
-
-		-- check if the chest was destroyed in the meantime
-		local chestinfo = minetest.deserialize(this.meta:get_string("chestinfo")) --get add info
-		if not chestinfo then
-			return -- chest removed during the load
-		end
-
-		-- go trough all file entries
-		for i=startpos, #we do
-			-- map to the internal node format
-			local node = townchest.nodes.new(we[i]):map() --mapped
-			if node and node.x and node.y and node.z then
-				this.plan:add_node(node)
-				this.plan:adjust_flatting_requrement(node)
-			end
-
-			if i % preparing_plan_chunk == 0 then --report and restart plan chain each 1000 node
-				dprint("next processing chunk")
-				this.infotext = "Reading node "..i.." of "..#we
-				this:set_form("status")
-				-- save current state
-
-				minetest.after(0.5, this.prepare_building_plan_chain, this, we, i+1 ) --start next file processing chain
-				return
-			end
-		end
-
-	-- loop finished, all nodes processed
-		dprint("reading of building done. Save them to the chest metadata")
-		this.infotext = "Reading file "..this.info.filename.." done, preparing "
-		this:set_form("status")
-		minetest.after(0,chest.prepare_building_plan_chain_postprocess, this) --next stage
-	end
-
-	--------------------------------------
-	-- mark file reading as the next chest task
-	--------------------------------------
-	function chest.prepare_building_plan(this, filename)
-
-		this.current_stage = "reading"
-		this.info.filename = filename
-		this.infotext = "Reading file "..filename
-		this:set_form("status")
-
-		this.plan = townchest.plan.new(this)
-
-	-- check if file could be read
-		local we = townchest.files.readfile(this.info.filename)
-		if not we or #we == 0 then
-			this.infotext = "No building found in ".. filename
-			this:set_form("status")
-			this.current_stage = "select"
-			this:persist_info()
-			minetest.after(3, this.set_form, this, "select_file") --back to file selection
-			return
-		end
-		--start first processing chunk
-		this:persist_info()
-		minetest.after(0, this.prepare_building_plan_chain, this, we, 1) --start file processing chain
-	end
-
-	--------------------------------------
-	-- Do a instant build step
-	--------------------------------------
-	function chest.instant_build(this)
-		dprint("Entering instant build")
-		-- check if the chest was destroyed in the meantime (for minetest.after started chunks
-		local chestinfo = minetest.deserialize(this.meta:get_string("chestinfo")) --get add info
-		if not chestinfo then
-			dprint("no chestinfo - asume the chest is removed")
-			return -- chest removed during the load
-		end
-
+	function chest.instant_build_chain(this)
 		if not this.info.instantbuild then --instantbuild disabled
 			return
 		end
@@ -194,8 +249,6 @@ townchest.chest.new = function()
 			dprint("start building chunk for", startingnode[1].x.."/"..startingnode[1].y.."/"..startingnode[1].z)
 			minetest.forceload_block(this.plan:get_world_pos(startingnode[1]))
 			for idx, node in ipairs(this.plan:get_nodes_from_chunk(startingnode[1])) do
-	--	for idx, node in ipairs(this.plan:get_nodes(instant_build_chunk)) do
-
 				local wpos = this.plan:get_world_pos(node)
 				if wpos.x ~= this.pos.x or wpos.y ~= this.pos.y or wpos.z ~= this.pos.z then --skip chest pos
 					--- Place node
@@ -208,15 +261,12 @@ townchest.chest.new = function()
 			end
 			minetest.forceload_free_block(this.plan:get_world_pos(startingnode[1]))
 		end
-
-		this:set_form("build_status") -- building status
-
+		this:update_info("build_status")
 		if this.plan.building_size > 0 then --report and restart next plan chain
-			dprint("next building chunk")
-			this.infotext = "Nodes left to build "..this.plan.building_size
-			minetest.after(1, this.instant_build, this ) --start next file processing chain
+			return true
 		else
 			this.instantbuild = nil --disable instant build
+			return false
 		end
 	end
 
@@ -232,10 +282,9 @@ townchest.chest.new = function()
 		end
 	end
 
-
 	function chest.update_statistics(this)
 		if this.current_stage == "ready" then --update building status in case of ready (or build in process after ready)
-			this:set_form("build_status")
+			this:update_info("build_status")
 		end
 	end
 
@@ -248,11 +297,10 @@ townchest.chest.new = function()
 			dprint("no chestinfo - asume the chest is removed")
 			return -- chest removed during the load
 		end
-
 		dprint("restoral info", dump(chestinfo))
-		if chestinfo.filename and not this.current_stage then -- file selected but no plan. Restore the plan
+		if chestinfo.taskname and not this.current_stage then -- file selected but no plan. Restore the plan
 			this.current_stage = "restore"
-			this:prepare_building_plan(chestinfo.filename)
+			chest:set_rawdata(this.info.taskname)
 		elseif not chestinfo.filename then
 			this:set_form("file_open")
 		end
