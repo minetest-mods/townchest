@@ -125,7 +125,7 @@ local _status = function(state)
 		return false -- no update
 	end
 	state:size(7,1)
-	state:label(0,0,"info",chest.infotext)
+	state:label(0,0,"info", chest.infotext)
 	return true --successfull build, update needed
 end
 smartfs.create("status", _status)
@@ -157,10 +157,10 @@ local _build_status = function(state)
 
 	-- create screen
 	state:size(10,5)
-	local l1 = state:label(1,0.5,"l1")
-	local l2 = state:label(1,1.0,"l2")
-	local l3 = state:label(1,1.5,"l3")
-	local l4 = state:label(1,2.0,"l4")
+	local l1 = state:label(1,0.5,"l1","set in set_dynamic_values()")
+	local l2 = state:label(1,1.0,"l2","set in set_dynamic_values()")
+	local l3 = state:label(1,1.5,"l3","set in set_dynamic_values()")
+	local l4 = state:label(1,2.0,"l4","set in set_dynamic_values()")
 
 	if chest.info.taskname == "file" then
 		l1:setText("Building "..chest.info.filename.." selected")

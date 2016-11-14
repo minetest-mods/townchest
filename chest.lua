@@ -98,7 +98,7 @@ townchest.chest.new = function()
 	function chest.set_form(this, formname)
 		this:set_infotext(formname)
 		this:persist_info() -- the form read data from persistance handler
-		smartfs:__call(formname):attach_nodemeta(this.pos, nil)
+		smartfs.get(formname):attach_to_node(this.pos)
 	end
 
 	--------------------------------------

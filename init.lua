@@ -14,7 +14,7 @@ townchest.dprint = dprint
 townchest.dprint_off = dprint_off
 
 -- UI tools/ formspec
-dofile(townchest.modpath.."/".."smartfs.lua")
+townchest.smartfs = dofile(townchest.modpath.."/".."smartfs.lua")
 dofile(townchest.modpath.."/".."smartfs-forms.lua")
 
 local smartfs = townchest.smartfs
