@@ -303,7 +303,6 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				end
 				minetest.env:add_node(self.targetnode.pos, self.targetnode)
 				if self.targetnode.meta then
-					print("meta:", self.targetnode.name, dump(self.targetnode.meta))
 					minetest.env:get_meta(self.targetnode.pos):from_table(self.targetnode.meta)
 				end
 				self.chest.plan:set_node_processed(self.targetnode)
