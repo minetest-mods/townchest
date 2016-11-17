@@ -221,8 +221,7 @@ local _build_status = function(state)
 	-- spawn NPC button
 	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
 	spawn_bt:onClick(function(self, state, player)
-		local pos = state.location.pos
-		minetest.add_entity({x=(pos.x+math.random(0,4)-2),y=(pos.y+math.random(0,2)),z=(pos.z+math.random(0,4)-2)}, "townchest:builder")
+		townchest.npc.spawn_nearly(state.location.pos, player)
 	end)
 
 	state:onInput(function(self, fields)

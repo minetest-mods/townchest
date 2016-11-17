@@ -6,7 +6,7 @@ townchest.modpath = minetest.get_modpath(minetest.get_current_modname())
 -- debug. Used for debug messages. In production the function should be empty
 local dprint = function(...)
 -- debug print. Comment out the next line if you don't need debug out
---	print(unpack(arg))
+	print(unpack(arg))
 end
 local dprint_off = function(...)
 end
@@ -32,7 +32,7 @@ dofile(townchest.modpath.."/".."nodes.lua")
 dofile(townchest.modpath.."/".."plan.lua")
 
 -- NPC's
-dofile(townchest.modpath.."/".."npc.lua")
+dofile(townchest.modpath.."/".."npcf-worker.lua")
 
 
 -----------------------------------------------
