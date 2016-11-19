@@ -122,6 +122,12 @@ local function prefer_target(npc, t1, t2)
 	end
 
 	local npcpos = npc.object:getpos()
+
+	-- variables for vectors based preference manipulation
+	local t1_c = {x=t1.pos.x, y=t1.pos.y, z=t1.pos.z}
+	local t2_c = {x=t2.pos.x, y=t2.pos.y, z=t2.pos.z}
+
+	-- variable for value based preference manipulation
 	local prefer = 0
 
 	--prefer same items in building order
@@ -134,26 +140,39 @@ local function prefer_target(npc, t1, t2)
 		end
 	end
 
-	local t1_c = {x=t1.pos.x, y=t1.pos.y, z=t1.pos.z}
-	local t2_c = {x=t2.pos.x, y=t2.pos.y, z=t2.pos.z}
-
 	-- note: npc is higher by y+1.5
 	-- in case of clanup task prefer higher node
 	if t1.name ~= "air" then
-		t1_c.y = t1_c.y + 3 -- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
+		-- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
+		t1_c.y = t1_c.y + 3
 	else
-		prefer = prefer + 2 -- prefer air
-		t1_c.y = t1_c.y - 1 
+		-- prefer air
+		t1_c.y = t1_c.y - 2
 	end
 
 	if t2.name ~= "air" then
-		t2_c.y = t2_c.y + 3 -- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
+		-- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
+		t2_c.y = t2_c.y + 3
 	else
-		prefer = prefer - 2 -- prefer air
-		t2_c.y = t2_c.y - 1 
+		-- prefer air
+		t2_c.y = t2_c.y - 2
 	end
 
-	if (vector.distance(npcpos, t2_c) + prefer) < vector.distance(npcpos, t1_c) then
+	-- avoid build directly under or over the npc. No extra bonus for air in this case
+	if math.abs(npcpos.x - t1.pos.x) < 1 and math.abs(npcpos.z - t1.pos.z) < 1 then
+		prefer = prefer-2
+	elseif t1.name == "air" then
+		prefer = prefer+2
+	end
+	if math.abs(npcpos.x - t2.pos.x) < 1 and math.abs(npcpos.z - t2.pos.z) < 1 then
+		prefer = prefer+2
+	elseif t2.name == "air" then
+		prefer = prefer-2
+	end
+
+
+	-- compare
+	if vector.distance(npcpos, t1_c) - prefer > vector.distance(npcpos, t2_c) then
 		return t2
 	else
 		return t1
@@ -277,13 +296,8 @@ npcf:register_npc("townchest:npcf_builder" ,{
 		local acceleration = {x=0, y=-10, z=0}
 		if self.targetnode then
 			local target_distance = vector.distance(pos, self.targetnode.pos)
-			local target_direcion = vector.direction(pos, self.targetnode.pos)
-			local real_distance = 0
-			local real_direction = {x=0, y=0, z=0}
 			local last_distance = 0
 			if self.var.last_pos then
-				real_distance = vector.distance(self.var.last_pos, pos)
-				real_direction = vector.direction(self.var.last_pos, pos)
 				last_distance = vector.distance(self.var.last_pos, self.targetnode.pos)
 			end
 
@@ -343,9 +357,22 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				self.targetnode = nil
 			else
 				--target not reached
+				state = NPCF_ANIM_WALK
+				-- Big jump / teleport upsite
+				if (self.targetnode.pos.y -(pos.y-1.5)) > 0 and
+						math.abs(self.targetnode.pos.x - pos.x) <= 3 and
+						math.abs(self.targetnode.pos.z - pos.z) <= 3 then
+					acceleration = {x=0, y=0, z=0}
+					pos = {x=pos.x, y=self.targetnode.pos.y + 1.5, z=pos.z}
+					self.object:setpos(pos)
+					target_distance = 0 -- to skip the next part and set speed to 0
+					local state = NPCF_ANIM_STAND
+				end
+
 				-- teleport in direction in case of stucking
 				if (last_distance - 0.01) <= target_distance and self.laststep == "walk" and 
 						(self.target_prev == self.targetnode) then
+					local target_direcion = vector.direction(pos, self.targetnode.pos)
 					pos = vector.add(pos, vector.multiply(target_direcion, 2))
 					if pos.y < self.targetnode.pos.y then
 						pos = {x=pos.x, y=self.targetnode.pos.y + 1.5, z=pos.z}
@@ -353,7 +380,6 @@ npcf:register_npc("townchest:npcf_builder" ,{
 					self.object:setpos(pos)
 					acceleration = {x=0, y=0, z=0}
 				end
-				state = NPCF_ANIM_WALK
 				self.var.last_pos = pos
 				speed = get_speed(target_distance)
 				self.laststep = "walk"
