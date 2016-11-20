@@ -59,7 +59,7 @@ end
 local __on_destruct = function(pos)
 	dprint("on_destruct")
 	-- remove all cached chest references
-	local key = pos.x..","..pos.y..","..pos.z
+	local key = minetest.pos_to_string(pos)
 	townchest.chest.list[key] = nil --delete old reference
 end
 
@@ -67,7 +67,6 @@ end
 -- restore - called in lbm, restore chest internal data if the server was restarted
 -----------------------------------------------
 local __restore = function(pos, node)
-	dprint("check and restore chest")
 	local chest = townchest.chest.get(pos)
 	chest:restore()
 end

@@ -178,7 +178,7 @@ end
 
 
 local __id = function(this)
-	return this.x..","..this.y..","..this.z
+	return minetest.pos_to_string(this)
 end
 
 

@@ -408,6 +408,7 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			for field,value in pairs(fields) do
 				self:_sfs_recieve_field_(field, value)
 			end
+
 			-- process onInput hooks
 			self:_sfs_process_oninput_(fields, player)
 

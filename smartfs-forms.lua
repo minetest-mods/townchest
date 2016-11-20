@@ -126,7 +126,6 @@ local _file_open_dialog = function(state)
 end
 smartfs.create("file_open", _file_open_dialog)
 
-
 -----------------------------------------------
 -- Status dialog
 -----------------------------------------------
@@ -142,12 +141,12 @@ local _status = function(state)
 end
 smartfs.create("status", _status)
 
-
-
 -----------------------------------------------
 -- Building status dialog
 -----------------------------------------------
 local _build_status = function(state)
+	-- local reference to function defined at end of this function
+	local set_dynamic_values
 
 	-- connect to chest data
 	local chest = townchest.chest.get(state.location.pos)
@@ -158,22 +157,56 @@ local _build_status = function(state)
 	end
 	local relative = chest.plan.relative
 
-	-- helper function - disable something if build is in process
-	local function set_processing_visibility(the_element)
-		if chest.info.npc_build or chest.info.instantbuild then
-			the_element:setIsHidden(true)
-		else
-			the_element:setIsHidden(false)
-		end
-	end
-
 	-- create screen
 	state:size(10,5)
 	local l1 = state:label(1,0.5,"l1","set in set_dynamic_values()")
-	local l2 = state:label(1,1.0,"l2","set in set_dynamic_values()")
-	local l3 = state:label(1,1.5,"l3","set in set_dynamic_values()")
-	local l4 = state:label(1,2.0,"l4","set in set_dynamic_values()")
+	local l2 = state:label(1,1.0,"l2","set static at bottom")
+	local l3 = state:label(1,1.5,"l3","set static at bottom")
+	local l4 = state:label(1,2.0,"l4","set static at bottom")
 
+	-- refresh building button
+	local reload_bt = state:button(5,4,3,0.5,"reload_bt", "Reload nodes")
+	reload_bt:onClick(function(self, state, player)
+		chest:set_rawdata(chest.info.taskname)
+	end)
+
+	--Instand build button
+	local inst_tg = state:toggle(1,3,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"})
+	inst_tg:onToggle(function(self, state, player)
+		if self:getId() == 2 then
+			chest.info.instantbuild = true
+		else
+			chest.info.instantbuild = false
+		end
+		set_dynamic_values()
+		chest:persist_info()
+		chest:run_async(chest.instant_build_chain)
+	end)
+
+	-- NPC build button
+	local npc_tg = state:toggle(5,3,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
+	npc_tg:onToggle(function(self, state, player)
+		if self:getId() == 2 then
+			chest.info.npc_build = true      --is used by NPC
+		else
+			chest.info.npc_build = false
+		end
+		set_dynamic_values()
+		chest:persist_info()
+	end)
+
+	-- spawn NPC button
+	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
+	spawn_bt:onClick(function(self, state, player)
+		townchest.npc.spawn_nearly(state.location.pos, player)
+	end)
+
+	-- update data each input
+	state:onInput(function(self, fields)
+		set_dynamic_values()
+	end)
+
+	-- set semi-dynamic data that is static at state livetime
 	if chest.info.taskname == "file" then
 		l1:setText("Building "..chest.info.filename.." selected")
 	elseif chest.info.taskname == "generate" then
@@ -182,64 +215,31 @@ local _build_status = function(state)
 	l2:setText("Size: "..(relative.max_x-relative.min_x).." x "..(relative.max_z-relative.min_z))
 	l3:setText("Building high: "..(relative.max_y-relative.min_y).."  Ground high: "..(relative.ground_y-relative.min_y))
 
-	local function set_dynamic_values()
+	--update data on demand without rebuild the state
+	set_dynamic_values = function()
 		l4:setText("Nodes to do: "..chest.plan.building_size)
+
+		if chest.info.npc_build == true then
+			npc_tg:setId(2)
+		else
+			npc_tg:setId(1)
+		end
+
+		if chest.info.instantbuild == true then
+			inst_tg:setId(2)
+		else
+			inst_tg:setId(1)
+		end
+
+		if chest.info.npc_build == true or chest.info.instantbuild == true then
+			reload_bt:setIsHidden(true)
+		else
+			reload_bt:setIsHidden(false)
+		end
 	end
+
+	-- update data once at init
 	set_dynamic_values()
-
-	-- refresh building button
-	local reload_bt = state:button(5,4,3,0.5,"reload_bt", "Reload nodes")
-	reload_bt:onClick(function(self, state, player)
-		chest:set_rawdata(chest.info.taskname)
-	end)
-
-	set_processing_visibility(reload_bt)
-
-	--Instand build button
-	local inst_tg = state:toggle(1,3,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"})
-	inst_tg:onToggle(function(self, state, player)
-		if self:getId() == 2 then
-			chest.info.instantbuild = true
-		else
-			chest.info.instantbuild = nil
-		end
-		set_processing_visibility(reload_bt)
-		chest:persist_info()
-		chest:run_async(chest.instant_build_chain)
-	end)
-	if chest.info.instantbuild then
-		inst_tg:setId(2)
-	else
-		inst_tg:setId(1)
-	end
-
-	-- NPC build button
-	local npc_tg = state:toggle(5,3,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
-	npc_tg:onToggle(function(self, state, player)
-		if self:getId() == 2 then
-			chest.info.npc_build = true      --is used by NPC
-		else
-			chest.info.npc_build = nil
-		end
-		set_processing_visibility(reload_bt)
-		chest:persist_info()
-	end)
-	if chest.info.npc_build then
-		npc_tg:setId(2)
-	else
-		npc_tg:setId(1)
-	end
-
-	-- spawn NPC button
-	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
-	spawn_bt:onClick(function(self, state, player)
-		townchest.npc.spawn_nearly(state.location.pos, player)
-	end)
-
-	state:onInput(function(self, fields)
-		set_dynamic_values()
-	end)
-
 	return true --successfull build, update needed
 end
 smartfs.create("build_status", _build_status)

@@ -63,7 +63,7 @@ local __prepare = function(this)
 		end
 		for x = this.relative.min_x - additional, this.relative.max_x + additional do
 			for z = this.relative.min_z - additional, this.relative.max_z + additional do
-				if not this.building_full[x..","..y..","..z] then -- not in plan - flat them
+				if not this.building_full[minetest.pos_to_string({x=x, y=y, z=z})] then -- not in plan - flat them
 					local node = townchest.nodes.new({ x=x, y=y, z=z, name="air", matname = townchest.nodes.c_free_item })
 					this:add_node(node)
 				end
@@ -133,7 +133,7 @@ local __get_nodes_from_chunk = function(this, node)
 		for y = vpos.y, vpos.y + BLOCKSIZE do
 			for z = vpos.z, vpos.z + BLOCKSIZE do
 				--local node = this.building_full[node:id()]
-				local node = this.building_full[x..","..y..","..z]
+				local node = this.building_full[minetest.pos_to_string({x=x,y=y,z=z})]
 				if node then
 					table.insert(ret, node)
 				end

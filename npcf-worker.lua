@@ -35,7 +35,7 @@ end
 local select_chest = function(self)
 	-- do nothing if the chest not ready
 	if not self.metadata.chestpos
-			or not townchest.chest.list[self.metadata.chestpos.x..","..self.metadata.chestpos.y..","..self.metadata.chestpos.z] --chest position not valid
+			or not townchest.chest.list[minetest.pos_to_string(self.metadata.chestpos)] --chest position not valid
 			or not self.chest
 			or not self.chest:npc_build_allowed() then --chest buid not ready
 
@@ -61,8 +61,8 @@ end
 
 local get_if_buildable = function(self, realpos)
 	local pos = self.chest.plan:get_plan_pos(realpos)
---	dprint("in plan", pos.x.."/"..pos.y.."/"..pos.z)
-	local node = self.chest.plan.building_full[pos.x..","..pos.y..","..pos.z]
+--	dprint("in plan", minetest.pos_to_string(pos))
+	local node = self.chest.plan.building_full[minetest.pos_to_string(pos)]
 	if not node then
 		return nil
 	end
@@ -75,7 +75,7 @@ local get_if_buildable = function(self, realpos)
 	-- check if already build (skip the most air)
 	local success = minetest.forceload_block(realpos) --keep the target node loaded
 	if not success then
-		dprint("error forceloading:", realpos.x.."/"..realpos.y.."/"..realpos.z)
+		dprint("error forceloading:", minetest.pos_to_string(realpos))
 	end
 	local orig_node = minetest.get_node(realpos)
 	minetest.forceload_free_block(realpos)
@@ -251,7 +251,7 @@ local get_target = function(self)
 		
 		local startingnode = plan:get_nodes(1,jump)
 		if startingnode[1] then -- the one node given
-			dprint("---check chunk", startingnode[1].x.."/"..startingnode[1].y.."/"..startingnode[1].z)
+			dprint("---check chunk", minetest.pos_to_string(startingnode[1]))
 			for idx, nodeplan in ipairs(plan:get_nodes_from_chunk(startingnode[1])) do
 				local node_wp = plan:get_world_pos(nodeplan)
 				local node = get_if_buildable(self, node_wp)
@@ -268,6 +268,12 @@ local get_target = function(self)
 	if selectednode then
 		selectednode.pos = plan:get_world_pos(selectednode)
 		return selectednode
+	else
+		dprint("no next node found", plan.building_size)
+		if plan.building_size == 0 then
+			self.chest.info.npc_build = false
+		end
+		self.chest:update_statistics()
 	end
 end
 
