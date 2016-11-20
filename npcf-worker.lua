@@ -1,6 +1,7 @@
 local dprint = townchest.dprint --debug
 
 local MAX_SPEED = 5
+local BUILD_DISTANCE = 3
 
 
 townchest.npc = {
@@ -54,8 +55,6 @@ local select_chest = function(self)
 			self.chest = nil
 			self.chestpos = nil
 		end
-	else
-		dprint("Chest ok:",self.chest)
 	end
 end
 
@@ -122,12 +121,12 @@ local function prefer_target(npc, t1, t2)
 	end
 
 	local npcpos = npc.object:getpos()
+	-- npc is 1.5 blocks over the work
+	npcpos.y = npcpos.y - 1.5
 
-	-- variables for vectors based preference manipulation
+	-- variables for preference manipulation
 	local t1_c = {x=t1.pos.x, y=t1.pos.y, z=t1.pos.z}
 	local t2_c = {x=t2.pos.x, y=t2.pos.y, z=t2.pos.z}
-
-	-- variable for value based preference manipulation
 	local prefer = 0
 
 	--prefer same items in building order
@@ -140,36 +139,55 @@ local function prefer_target(npc, t1, t2)
 		end
 	end
 
-	-- note: npc is higher by y+1.5
-	-- in case of clanup task prefer higher node
+	-- prefer the last target node
+	if npc.targetnode then
+		if t1.x == npc.targetnode.pos.x and
+				t1.y == npc.targetnode.pos.y and
+				t1.z == npc.targetnode.pos.z then
+			prefer = prefer + BUILD_DISTANCE
+		end
+		if t2.x == npc.targetnode.pos.x and
+				t2.y == npc.targetnode.pos.y and
+				t2.z == npc.targetnode.pos.z then
+			prefer = prefer - BUILD_DISTANCE
+		end
+	end
+
+	-- prefer air in general
+	if t1.name == "air" then
+		prefer = prefer + 2
+	end
+	if t2.name == "air" then
+		prefer = prefer - 2
+	end
+
+	-- prefer lower node if not air
 	if t1.name ~= "air" then
-		-- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
-		t1_c.y = t1_c.y + 3
-	else
-		-- prefer air
-		t1_c.y = t1_c.y - 2
+		t1_c.y = t1_c.y + 1
+	elseif math.abs(npcpos.y - t1.pos.y) <= BUILD_DISTANCE then
+		-- prefer higher node if air in reachable distance
+		t1_c.y = t1_c.y - 4
 	end
 
+	-- prefer lower node if not air
 	if t2.name ~= "air" then
-		-- calculate as over the npc by additional 1.5. no change means lower then npc by 1.5
-		t2_c.y = t2_c.y + 3
-	else
-		-- prefer air
-		t2_c.y = t2_c.y - 2
+		t2_c.y = t2_c.y + 1
+	elseif math.abs(npcpos.y - t1.pos.y) <= BUILD_DISTANCE then
+		-- prefer higher node if air in reachable distance
+		t2_c.y = t2_c.y - 4
 	end
 
-	-- avoid build directly under or over the npc. No extra bonus for air in this case
-	if math.abs(npcpos.x - t1.pos.x) < 1 and math.abs(npcpos.z - t1.pos.z) < 1 then
-		prefer = prefer-2
-	elseif t1.name == "air" then
-		prefer = prefer+2
+	-- avoid build directly under or in the npc
+	if math.abs(npcpos.x - t1.pos.x) < 0.5 and
+			math.abs(npcpos.y - t1.pos.y) < 2 and
+			math.abs(npcpos.z - t1.pos.z) < 0.5 then
+		prefer = prefer-1.5
 	end
-	if math.abs(npcpos.x - t2.pos.x) < 1 and math.abs(npcpos.z - t2.pos.z) < 1 then
-		prefer = prefer+2
-	elseif t2.name == "air" then
-		prefer = prefer-2
+	if math.abs(npcpos.x - t2.pos.x) < 0.5 and
+			math.abs(npcpos.y - t1.pos.y) < 2 and
+			math.abs(npcpos.z - t2.pos.z) < 0.5 then
+		prefer = prefer+1.5
 	end
-
 
 	-- compare
 	if vector.distance(npcpos, t1_c) - prefer > vector.distance(npcpos, t2_c) then
@@ -303,7 +321,7 @@ npcf:register_npc("townchest:npcf_builder" ,{
 
 			yaw = npcf:get_face_direction(pos, self.targetnode.pos)
 			-- target reached build
-			if target_distance < 3 and self.dest_type == "build" then
+			if target_distance <= BUILD_DISTANCE and self.dest_type == "build" then
 				-- do the build
 				local soundspec
 				if minetest.registered_items[self.targetnode.name].sounds then
@@ -332,13 +350,6 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				if target_distance > 2 then
 					speed = 1
 					state = NPCF_ANIM_WALK_MINE
-
-					-- jump
-					if self.targetnode.name ~= "air" and (self.targetnode.pos.y -(pos.y-1.5)) > 0 and (self.targetnode.pos.y -(pos.y-1.5)) < 2 then
-						acceleration = {x=0, y=0, z=0}
-						pos = {x=pos.x, y=self.targetnode.pos.y + 1.5, z=pos.z}
-						self.object:setpos(pos)
-					end
 				else
 					speed = 0
 					state = NPCF_ANIM_MINE
@@ -359,14 +370,15 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				--target not reached
 				state = NPCF_ANIM_WALK
 				-- Big jump / teleport upsite
-				if (self.targetnode.pos.y -(pos.y-1.5)) > 0 and
-						math.abs(self.targetnode.pos.x - pos.x) <= 3 and
-						math.abs(self.targetnode.pos.z - pos.z) <= 3 then
+				if (self.targetnode.pos.y -(pos.y-1.5)) > BUILD_DISTANCE and
+						math.abs(self.targetnode.pos.x - pos.x) <= 0.5 and
+						math.abs(self.targetnode.pos.z - pos.z) <= 0.5 then
 					acceleration = {x=0, y=0, z=0}
 					pos = {x=pos.x, y=self.targetnode.pos.y + 1.5, z=pos.z}
 					self.object:setpos(pos)
 					target_distance = 0 -- to skip the next part and set speed to 0
-					local state = NPCF_ANIM_STAND
+					state = NPCF_ANIM_STAND
+					dprint("Big jump to"..minetest.pos_to_string(pos))
 				end
 
 				-- teleport in direction in case of stucking
@@ -379,6 +391,9 @@ npcf:register_npc("townchest:npcf_builder" ,{
 					end
 					self.object:setpos(pos)
 					acceleration = {x=0, y=0, z=0}
+					target_distance = 0 -- to skip the next part and set speed to 0
+					state = NPCF_ANIM_STAND
+					dprint("Teleport to"..minetest.pos_to_string(pos))
 				end
 				self.var.last_pos = pos
 				speed = get_speed(target_distance)

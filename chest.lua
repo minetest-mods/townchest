@@ -16,14 +16,12 @@ local __get = function(pos)
 	local this = nil
 	if townchest.chest.list[key] then
 		this = townchest.chest.list[key]
-		dprint("get key from list", this)
 	else
 		this = townchest.chest.new()
 		this.key = key
 		this.pos = pos
 		this.meta = minetest.env:get_meta(pos) --just pointer
 		townchest.chest.list[key] = this
-		dprint("get new key", this)
 	end
 
 	-- update chest info
@@ -114,9 +112,16 @@ townchest.chest.new = function()
 	-- Create the task that should be managed by chest
 	--------------------------------------
 	function chest.set_rawdata(this, taskname)
-		if taskname == "file" then
+		this.plan = townchest.plan.new(this)
+		local we = {}
+
+		if taskname then
+			this.info.taskname = taskname
+		end
+
+		if this.info.taskname == "file" then
 		-- check if file could be read
-			local we = townchest.files.readfile(this.info.filename)
+			we = townchest.files.readfile(this.info.filename)
 			if not we or #we == 0 then
 				this.infotext = "No building found in ".. this.info.filename
 				this:set_form("status")
@@ -126,39 +131,59 @@ townchest.chest.new = function()
 				minetest.after(3, this.set_form, this, "file_open") --back to file selection
 				return
 			end
-			this.rawdata = we
 
-		elseif taskname == "generate" then
-			local we = {}
-			if this.info.genblock.fill == "true" then
---[[				for x = -math.floor(this.info.genblock.x/2), math.floor(this.info.genblock.x/2) do
-					for y = -1, this.info.genblock.y -2 do -- 1 under the chest
-						for z = -math.floor(this.info.genblock.z/2), math.floor(this.info.genblock.z/2) do
+		elseif this.info.taskname == "generate" then
+			if this.info.genblock.variant == 1 then
+				-- Fill with air
+				for x = 0, this.info.genblock.x-1 do
+					for y = 0, this.info.genblock.y-1 do
+						for z = 0, this.info.genblock.z-1 do
+							table.insert(we, {x=x,y=y,z=z, name = "air"})
+						end
+					end
+				end
+			elseif this.info.genblock.variant == 2 then
+				-- Fill with stone
+				for x = 0, this.info.genblock.x-1 do
+					for y = 0, this.info.genblock.y-1 do
+						for z = 0, this.info.genblock.z-1 do
 							table.insert(we, {x=x,y=y,z=z, name = "default:cobble"})
 						end
 					end
 				end
-]]
-				for x = -math.floor(this.info.genblock.x/2), math.floor(this.info.genblock.x/2) do
-					for y = -1, this.info.genblock.y -2 do -- 1 under the chest
-						for z = -math.floor(this.info.genblock.z/2), math.floor(this.info.genblock.z/2) do
-							if x == -math.floor(this.info.genblock.x/2) or x == math.floor(this.info.genblock.x/2) or
-									y == -1 or y == this.info.genblock.y -2 or
-									z == -math.floor(this.info.genblock.z/2) or z == math.floor(this.info.genblock.z/2) then
+
+			elseif this.info.genblock.variant == 3 then
+				-- Build a box
+				for x = 0, this.info.genblock.x-1 do
+					for y = 0, this.info.genblock.y-1 do
+						for z = 0, this.info.genblock.z-1 do
+							if x == 0 or x == this.info.genblock.x-1 or
+									y == 0 or y == this.info.genblock.y-1 or
+									z == 0 or z == this.info.genblock.z-1 then
 								table.insert(we, {x=x,y=y,z=z, name = "default:cobble"})
 							end
 						end
 					end
 				end
-			else
-				table.insert(we, {x=-math.floor(this.info.genblock.x/2),y=0,z=-math.floor(this.info.genblock.z/2), name = "air"})
-				table.insert(we, {x=math.floor(this.info.genblock.x/2),y=this.info.genblock.y -1,z=math.floor(this.info.genblock.z/2), name = "air"})
+
+				-- build ground level under chest
+				this.plan.relative.ground_y = 1
+
+			-- Build a plate
+			elseif this.info.genblock.variant == 4 then
+				local y = 0
+				for x = 0, this.info.genblock.x-1 do
+					for z = 0, this.info.genblock.z-1 do
+						table.insert(we, {x=x,y=y,z=z, name = "default:cobble"})
+					end
+				end
+				-- build ground level under chest
+				this.plan.relative.ground_y = 1
 			end
-			this.rawdata = we
 		end
 
-		this.info.taskname = taskname
-		this.plan = townchest.plan.new(this)
+		this.rawdata = we
+
 		chest:run_async(this.prepare_building_plan_chain)
 	end
 
@@ -300,7 +325,7 @@ townchest.chest.new = function()
 		dprint("restoral info", dump(chestinfo))
 		if chestinfo.taskname and not this.current_stage then -- file selected but no plan. Restore the plan
 			this.current_stage = "restore"
-			chest:set_rawdata(this.info.taskname)
+			chest:set_rawdata(chestinfo.taskname)
 		elseif not chestinfo.filename then
 			this:set_form("file_open")
 		end

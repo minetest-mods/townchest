@@ -1,16 +1,15 @@
 local dprint = townchest.dprint_off --debug
 
-
 townchest.specwidgets = {}
-
 
 --- temporary provide smartfs as builtin, till the needed changes are upstream
 local smartfs = townchest.smartfs
 --- temporary end
 
-
+-----------------------------------------------
+-- file open dialog form / (tabbed)
+-----------------------------------------------
 local _file_open_dialog = function(state)
-
 	--connect to chest object for data
 	local chest = townchest.chest.get(state.location.pos)
 
@@ -42,7 +41,9 @@ local _file_open_dialog = function(state)
 		end,
 	}
 
-	-- file selection tab button
+-----------------------------------------------
+-- file selection tab
+-----------------------------------------------
 	local tab1 = {}
 	tab1.button = state:button(0,0,2,1,"tab1_btn","Buildings")
 	tab1.button:onClick(function(self)
@@ -58,20 +59,29 @@ local _file_open_dialog = function(state)
 	end
 	tab_controller:tab_add("tab1", tab1)
 
+-----------------------------------------------
+-- Simple form building tab
+-----------------------------------------------
 	-- Tasks tab button
 	local tab2 = {}
 	tab2.button = state:button(2,0,2,1,"tab2_btn","Tasks")
 	tab2.button:onClick(function(self)
 		tab_controller:set_active("tab2")
 	end)
-	tab2.view = state:view(0.5,1,"tab2_view")
+	tab2.view = state:view(0,1,"tab2_view")
 	tab2.viewstate = tab2.view:getViewState()
 	-- Tasks tab view state
-	tab2.viewstate:label(0,0,"header","Free place for a build")
+	tab2.viewstate:label(0,0.2,"header","Build simple form")
+	local variant = tab2.viewstate:dropdown(3.5,0.2,4,0.5,"variant", 1)
+	variant:addItem("Fill with air") -- 1
+	variant:addItem("Fill with stone") -- 2
+	variant:addItem("Build a box") -- 3
+	variant:addItem("Build a plate") -- 4
+
 	local field_x = tab2.viewstate:field(0,2,2,0.5,"x","width (x)")
 	local field_y = tab2.viewstate:field(2,2,2,0.5,"y","high (y)")
 	local field_z = tab2.viewstate:field(4,2,2,0.5,"z","width (y)")
-	local fill_chk = tab2.viewstate:checkbox(0,3,"fill", "Fill place with stone")
+
 	tab_controller:tab_add("tab2", tab2)
 
 	--process all inputs
@@ -79,7 +89,8 @@ local _file_open_dialog = function(state)
 		chest.info.genblock.x = tonumber(field_x:getText())
 		chest.info.genblock.y = tonumber(field_y:getText())
 		chest.info.genblock.z = tonumber(field_z:getText())
-		chest.info.genblock.fill = fill_chk:getValue()
+		chest.info.genblock.variant = variant:getSelected()
+		chest.info.genblock.variant_name = variant:getSelectedItem()
 		chest:persist_info()
 	end)
 
@@ -108,9 +119,10 @@ local _file_open_dialog = function(state)
 	field_x:setText(tostring(chest.info.genblock.x or 1))
 	field_y:setText(tostring(chest.info.genblock.y or 1))
 	field_z:setText(tostring(chest.info.genblock.z or 1))
-	fill_chk:setValue(chest.info.genblock.fill)
+	variant:setSelected(chest.info.genblock.variant or 1)
 
-	return true --successfull build, update needed
+	--successfull build, update needed
+	return true
 end
 smartfs.create("file_open", _file_open_dialog)
 
@@ -165,7 +177,7 @@ local _build_status = function(state)
 	if chest.info.taskname == "file" then
 		l1:setText("Building "..chest.info.filename.." selected")
 	elseif chest.info.taskname == "generate" then
-		l1:setText("Simple task")
+		l1:setText("Simple task: "..chest.info.genblock.variant_name)
 	end
 	l2:setText("Size: "..(relative.max_x-relative.min_x).." x "..(relative.max_z-relative.min_z))
 	l3:setText("Building high: "..(relative.max_y-relative.min_y).."  Ground high: "..(relative.ground_y-relative.min_y))
