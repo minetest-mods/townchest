@@ -72,7 +72,7 @@ function smartfs.dynamic(name,player)
 end
 
 ------------------------------------------------------
--- Smartfs Interface - Adds a form to an installed advanced inventory. Returns true on success
+-- Smartfs Interface - Adds a form to an installed advanced inventory. Returns true on success.
 ------------------------------------------------------
 function smartfs.add_to_inventory(form, icon, title)
 	if unified_inventory then
@@ -126,7 +126,7 @@ function smartfs.override_load_checks()
 end
 
 ------------------------------------------------------
--- Minetest Interface - Receive input from sender to the node form
+-- Minetest Interface - on_receive_fields callback can be used in minetest.register_node for nodemeta forms
 ------------------------------------------------------
 function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender, params)
 	local meta = minetest.get_meta(nodepos)
@@ -161,7 +161,7 @@ function smartfs.nodemeta_on_receive_fields(nodepos, formname, fields, sender, p
 	end
 
 	-- take the input
-	state:_sfs_recieve_(name, fields)
+	state:_sfs_on_receive_fields_(name, fields)
 
 	-- Reset form if all players disconnected
 	if sender and not state.players:get_first() and not state.obsolete then
@@ -181,13 +181,13 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if smartfs.opened[name] and smartfs.opened[name].location.type == "player" then
 		if smartfs.opened[name].def.name == formname then
 			local state = smartfs.opened[name]
-			return state:_sfs_recieve_(name,fields)
+			return state:_sfs_on_receive_fields_(name, fields)
 		else
 			smartfs.opened[name] = nil
 		end
 	elseif smartfs.inv[name] and smartfs.inv[name].location.type == "inventory" then
 		local state = smartfs.inv[name]
-		state:_sfs_recieve_(name,fields)
+		state:_sfs_on_receive_fields_(name, fields)
 	end
 	return false
 end)
@@ -357,7 +357,8 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			end
 			return res
 		end,
-		_sfs_recieve_field_ = function(self, field, value) -- process each single received field
+		-- process /apply received field value
+		_sfs_process_value_ = function(self, field, value) -- process each single received field
 			local cur_namespace = self:getNamespace()
 			if cur_namespace == "" or cur_namespace == string.sub(field, 1, string.len(cur_namespace)) then -- Check current namespace
 				local rel_fieldname = string.sub(field, string.len(cur_namespace)+1)  --cut the namespace
@@ -366,13 +367,14 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 				else
 					for elename, eledef in pairs(self._ele) do
 						if eledef.getViewState then -- element supports sub-states
-							eledef:getViewState():_sfs_recieve_field_(field, value)
+							eledef:getViewState():_sfs_process_value_(field, value)
 						end
 					end
 				end
 			end
 		end,
-		_sfs_recieve_action_ = function(self, field, value, player)
+		-- process action for received field if supported
+		_sfs_process_action_ = function(self, field, value, player)
 			local cur_namespace = self:getNamespace()
 			if cur_namespace == "" or cur_namespace == string.sub(field, 1, string.len(cur_namespace)) then -- Check current namespace
 				local rel_fieldname = string.sub(field, string.len(cur_namespace)+1) --cut the namespace
@@ -383,12 +385,13 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 				else
 					for elename, eledef in pairs(self._ele) do
 						if eledef.getViewState then -- element supports sub-states
-						eledef:getViewState():_sfs_recieve_action_(field, value, player)
+						eledef:getViewState():_sfs_process_action_(field, value, player)
 						end
 					end
 				end
 			end
 		end,
+		-- process onInput hook for the state
 		_sfs_process_oninput_ = function(self, fields, player) --process hooks
 			-- call onInput hook if enabled
 			if self._onInput then
@@ -402,24 +405,23 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 			end
 		end,
 		-- Receive fields and actions from formspec
-		_sfs_recieve_ = function(self, player, fields)
-
+		_sfs_on_receive_fields_ = function(self, player, fields)
 			-- fields assignment
-			for field,value in pairs(fields) do
-				self:_sfs_recieve_field_(field, value)
+			for field, value in pairs(fields) do
+				self:_sfs_process_value_(field, value)
 			end
-
 			-- process onInput hooks
 			self:_sfs_process_oninput_(fields, player)
 
 			-- do actions
-			for field,value in pairs(fields) do
-				self:_sfs_recieve_action_(field, value, player)
+			for field, value in pairs(fields) do
+				self:_sfs_process_action_(field, value, player)
 			end
 
 			if not fields.quit and not self.closed and not self.obsolete then
 				self:_show_()
-			else -- to be closed
+			else
+				-- to be closed
 				self.players:disconnect(player)
 				if self.location.type == "player" then
 					smartfs.opened[player] = nil
@@ -766,10 +768,6 @@ function smartfs._makeState_(form, newplayer, params, is_inv, nodepos)
 		end,
 	}
 end
-
-
-
-
 
 -----------------------------------------------------------------
 -------------------------  ELEMENTS  ----------------------------
@@ -1235,7 +1233,8 @@ smartfs.element("view", {
 	end,
 	-- element interface methods
 	build = function(self)
-		return self:getViewState():_buildFormspec_(false)..self:getBackgroundString()
+		--the background string is "under" the view. Parts of this background can be overriden by elements (with background) from view
+		return self:getBackgroundString()..self:getViewState():_buildFormspec_(false)
 	end,
 	getViewState = function(self)
 		return self._state
