@@ -1,3 +1,4 @@
+local handle_schematics
 
 -- helper function; sorts by the second element of the table
 local function handle_schematics_comp(a,b)
@@ -105,3 +106,4 @@ handle_schematics.translate_param2_to_rotation = function( param2, mirror, start
 				max       = {x=max.x, y=max.y, z=max.z}};
 end
 
+return handle_schematics

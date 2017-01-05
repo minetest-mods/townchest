@@ -1,4 +1,4 @@
-
+local handle_schematics
 
 handle_schematics.sort_pos_get_size = function( p1, p2 )
 	local res = {x=p1.x, y=p1.y, z=p1.z,
@@ -160,3 +160,5 @@ handle_schematics.create_schematic_with_meta = function( p1, p2, base_filename )
 
 	return save_restore.file_exists( complete_filename );
 end
+
+return handle_schematics

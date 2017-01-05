@@ -10,27 +10,25 @@ local hsl = {}
 local modpath = minetest.get_modpath(minetest.get_current_modname())
 modpath = modpath..'/libs/hsl/'
 
--- adds worldedit_file.* namespace
 -- deserialize worldedit savefiles
- dofile(modpath.."worldedit_file.lua")
+hsl.worldedit_file = dofile(modpath.."worldedit_file.lua")
 
--- uses handle_schematics.* namespace
 -- reads and analyzes .mts files (minetest schematics)
-dofile(modpath.."/analyze_mts_file.lua") 
+hsl.analyze_mts = dofile(modpath.."/analyze_mts_file.lua")
 
 -- reads and analyzes worldedit files
-dofile(modpath.."/analyze_we_file.lua")
+hsl.analyze_we = dofile(modpath.."/analyze_we_file.lua")
 
 -- reads and analyzes Minecraft schematic files
-dofile(modpath.."/translate_nodenames_for_mc_schematic.lua")
-dofile(modpath.."/analyze_mc_schematic_file.lua")
+hsl.translate_mc = dofile(modpath.."/translate_nodenames_for_mc_schematic.lua")
+hsl.analyze_mc = dofile(modpath.."/analyze_mc_schematic_file.lua")
 
 -- handles rotation and mirroring
-dofile(modpath.."/rotate.lua")
+hsl.rotate = dofile(modpath.."/rotate.lua")
 
 -- count nodes, take param2 into account for rotation etc.
-dofile(modpath.."/handle_schematics_misc.lua") 
+hsl.misc = dofile(modpath.."/handle_schematics_misc.lua")
 
 -- store and restore metadata
-dofile(modpath.."/save_restore.lua");
-dofile(modpath.."/handle_schematics_meta.lua");
+hsl.save_restore = dofile(modpath.."/save_restore.lua");
+hsl.meta = dofile(modpath.."/handle_schematics_meta.lua");

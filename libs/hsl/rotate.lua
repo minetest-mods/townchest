@@ -1,3 +1,5 @@
+local handle_schematics
+
 local rotate_facedir = function(facedir)
 	return ({1, 2, 3, 0,
 		13, 14, 15, 12,
@@ -112,3 +114,5 @@ for paramtype2,v in pairs( handle_schematics.rotation_table ) do
 		end
 	end
 end
+
+return handle_schematics

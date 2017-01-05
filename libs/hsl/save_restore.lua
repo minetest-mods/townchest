@@ -1,6 +1,6 @@
 
 -- reserve the namespace
-save_restore = {}
+local save_restore = {}
 
 -- TODO: if this gets more versatile, add sanity checks for filename
 -- TODO: apart from allowing filenames,  schems/<filename> also needs to be allowed
@@ -86,3 +86,5 @@ save_restore.file_access = function( path, params )
 		return ie_io_open( path, params );
 	end
 end
+
+return save_restore

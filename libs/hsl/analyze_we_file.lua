@@ -1,3 +1,5 @@
+local handle_schematics
+
 handle_schematics.analyze_we_file = function(scm, we_origin)
 	local c_ignore = minetest.get_content_id("ignore")
 
@@ -98,3 +100,5 @@ handle_schematics.analyze_we_file = function(scm, we_origin)
 
 	return { size = { x=size.x, y=size.y, z=size.z}, nodenames = nodenames, on_constr = {}, after_place_node = {}, rotated=0, burried=0, scm_data_cache = scm, metadata = all_meta };
 end
+
+return handle_schematics

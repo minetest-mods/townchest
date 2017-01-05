@@ -1,3 +1,4 @@
+local handle_schematics
 
 -- based on:
 -- # Minecraft to Minetest WE schematic MCEdit filter
@@ -400,3 +401,5 @@ handle_schematics.findMC2MTConversion = function(blockid, blockdata)
 	end
 	return {air, 0};
 end
+
+return handle_schematics

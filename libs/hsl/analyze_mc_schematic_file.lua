@@ -1,3 +1,4 @@
+local handle_schematics
 
 -- This code is used to read Minecraft schematic files.
 --
@@ -213,3 +214,4 @@ print('FILE SIZE: '..tostring( string.len( data_string ))); -- TODO
 	return { size = { x=size.x, y=size.y, z=size.z}, nodenames = nodenames, on_constr = {}, after_place_node = {}, rotated=90, burried=0, scm_data_cache = scm, metadata = {}};
 end
 
+return handle_schematics

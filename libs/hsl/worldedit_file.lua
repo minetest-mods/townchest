@@ -8,8 +8,7 @@
 --  * originx, originy and originz are now passed as parameters to worldedit_file.load_schematic;
 --    they are required for an old file format
 ------------------------------------------------------------------------------------------
-
-worldedit_file = {} -- add the namespace
+local worldedit_file = {}
 
 --- Schematic serialization and deserialiation.
 -- @module worldedit.serialization
@@ -136,3 +135,5 @@ function worldedit_file.load_schematic(value, we_origin)
 	end
 	return nodes
 end
+
+return worldedit_file

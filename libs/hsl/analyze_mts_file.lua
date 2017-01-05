@@ -1,3 +1,4 @@
+local handle_schematics
 
 --[[ taken from src/mg_schematic.cpp:
         Minetest Schematic File Format
@@ -277,3 +278,5 @@ handle_schematics.analyze_file = function( file_name, origin_offset, store_as_mt
 	end
 	return res;
 end
+
+return handle_schematics
