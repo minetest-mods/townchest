@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 local rotate_facedir = function(facedir)
 	return ({1, 2, 3, 0,

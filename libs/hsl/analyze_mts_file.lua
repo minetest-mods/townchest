@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 --[[ taken from src/mg_schematic.cpp:
         Minetest Schematic File Format

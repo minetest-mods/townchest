@@ -14,25 +14,26 @@ townchest.dprint = dprint
 townchest.dprint_off = dprint_off
 
 -- UI tools/ formspec
-townchest.smartfs = dofile(townchest.modpath.."/".."smartfs.lua")
-dofile(townchest.modpath.."/".."smartfs-forms.lua")
+townchest.smartfs = dofile(townchest.modpath.."/smartfs.lua")
+dofile(townchest.modpath.."/smartfs-forms.lua")
 
 local smartfs = townchest.smartfs
 
 -- The Chest
-dofile(townchest.modpath.."/".."chest.lua")
+dofile(townchest.modpath.."/chest.lua")
 
 -- Reading building files (WorldEdit)
-dofile(townchest.modpath.."/".."files.lua")
+dofile(townchest.modpath.."/files.lua")
+townchest.hsl = dofile(townchest.modpath.."/libs/hsl/init.lua")
 
 -- Nodes mapping
-dofile(townchest.modpath.."/".."nodes.lua")
+dofile(townchest.modpath.."/nodes.lua")
 
 -- building plan
-dofile(townchest.modpath.."/".."plan.lua")
+dofile(townchest.modpath.."/plan.lua")
 
 -- NPC's
-dofile(townchest.modpath.."/".."npcf-worker.lua")
+dofile(townchest.modpath.."/npcf-worker.lua")
 
 
 -----------------------------------------------

@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 handle_schematics.sort_pos_get_size = function( p1, p2 )
 	local res = {x=p1.x, y=p1.y, z=p1.z,

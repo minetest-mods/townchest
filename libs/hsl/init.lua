@@ -32,3 +32,6 @@ hsl.misc = dofile(modpath.."/handle_schematics_misc.lua")
 -- store and restore metadata
 hsl.save_restore = dofile(modpath.."/save_restore.lua");
 hsl.meta = dofile(modpath.."/handle_schematics_meta.lua");
+
+
+return hsl

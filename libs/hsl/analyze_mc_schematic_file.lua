@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 -- This code is used to read Minecraft schematic files.
 --

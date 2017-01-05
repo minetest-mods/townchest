@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 -- helper function; sorts by the second element of the table
 local function handle_schematics_comp(a,b)

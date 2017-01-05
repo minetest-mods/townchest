@@ -1,4 +1,4 @@
-local handle_schematics
+local handle_schematics = {}
 
 -- based on:
 -- # Minecraft to Minetest WE schematic MCEdit filter
