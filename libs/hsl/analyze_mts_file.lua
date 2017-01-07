@@ -37,19 +37,9 @@ local handle_schematics = {}
 -- gets the size of a structure file
 -- nodenames: contains all the node names that are used in the schematic
 -- on_constr: lists all the node names for which on_construct has to be called after placement of the schematic
-handle_schematics.analyze_mts_file = function( path )
+handle_schematics.analyze_mts_file = function(file)
 	local size = { x = 0, y = 0, z = 0, version = 0 }
 	local version = 0;
-
-	local file, err = save_restore.file_access(path..'.mts', "rb")
-	if (file == nil) then
-		return nil
-	end
---print('[handle_schematics] Analyzing .mts file '..tostring( path..'.mts' ));
---if( not( string.byte )) then
---	print( '[handle_schematics] Error: string.byte undefined.');
---	return nil;
---end
 
 	-- thanks to sfan5 for this advanced code that reads the size from schematic files
 	local read_s16 = function(fi)
@@ -72,48 +62,28 @@ handle_schematics.analyze_mts_file = function( path )
 	-- read the slice probability for each y value that was introduced in version 3
 	if( size.version >= 3 ) then
 		-- the probability is not very intresting for buildings so we just skip it
-		file:read( size.y );
+		file:read( size.y )
 	end
-
 
 	-- this list is not yet used for anything
-	local nodenames = {};
-	-- this list is needed for calling on_construct after place_schematic
-	local on_constr = {};
-	-- nodes that require after_place_node to be called
-	local after_place_node = {};
+	local nodenames = {}
+	local ground_id = {}
+	local is_air = 0
 
 	-- after that: read_s16 (2 bytes) to find out how many diffrent nodenames (node_name_count) are present in the file
-	local node_name_count = read_s16( file );
+	local node_name_count = read_s16( file )
 
 	for i = 1, node_name_count do
-
 		-- the length of the next name
-		local name_length = read_s16( file );
+		local name_length = read_s16( file )
 		-- the text of the next name
-		local name_text   = file:read( name_length );
-
-		table.insert( nodenames, name_text );
-		-- in order to get this information, the node has to be defined and loaded
-		if( minetest.registered_nodes[ name_text ] and minetest.registered_nodes[ name_text ].on_construct) then
-			table.insert( on_constr, name_text );
-		end
-		-- some nodes need after_place_node to be called for initialization
-		if( minetest.registered_nodes[ name_text ] and minetest.registered_nodes[ name_text ].after_place_node) then
-			table.insert( after_place_node, name_text );
-		end
-	end
-
-	local rotated = 0;
-	local burried = 0;
-	local parts = path:split('_');
-	if( parts and #parts > 2 ) then
-		if( parts[#parts]=="0" or parts[#parts]=="90" or parts[#parts]=="180" or parts[#parts]=="270" ) then
-			rotated = tonumber( parts[#parts] );
-			burried = tonumber( parts[ #parts-1 ] );
-			if( not( burried ) or burried>20 or burried<0) then
-				burried = 0;
-			end
+		local name_text = file:read( name_length )
+		nodenames[i] = name_text
+		if string.sub(name_text, 1, 18) == "default:dirt_with_" or
+				name_text == "farming:soil_wet" then
+			ground_id[i] = true
+		elseif( name_text == 'air' ) then
+			is_air = i;
 		end
 	end
 
@@ -121,141 +91,80 @@ handle_schematics.analyze_mts_file = function( path )
 	if( minetest.decompress == nil) then
 		file.close(file);
 		return nil; -- normal place_schematic is no longer supported as minetest.decompress is now part of the release version of minetest
---		return { size = { x=size.x, y=size.y, z=size.z}, nodenames = nodenames, on_constr = on_constr, after_place_node = after_place_node, rotated=rotated, burried=burried, scm_data_cache = nil };
 	end
 
 	local compressed_data = file:read( "*all" );
 	local data_string = minetest.decompress(compressed_data, "deflate" );
 	file.close(file)
 
-	local ids = {};
-	local needs_on_constr = {};
-	local is_air = 0;
-	-- translate nodenames to ids
-	for i,v in ipairs( nodenames ) do
-		ids[ i ] = minetest.get_content_id( v );
-		needs_on_constr[ i ] = false;
-		if( minetest.registered_nodes[ v ] and minetest.registered_nodes[ v ].on_construct ) then
-			needs_on_constr[ i ] = true;
-		end
-		if( v == 'air' ) then
-			is_air = i;
-		end
-	end
-
 	local p2offset = (size.x*size.y*size.z)*3;
 	local i = 1;
+
 	local scm = {};
+	local min_pos = {}
+	local max_pos = {}
+	local nodecount = 0
+	local ground_y = 0
+	local groundnode_count = 0
+
 	for z = 1, size.z do
-	for y = 1, size.y do
-	for x = 1, size.x do
-		if( not( scm[y] )) then
-			scm[y] = {};
-		end
-		if( not( scm[y][x] )) then
-			scm[y][x] = {};
-		end
-		local id = string.byte( data_string, i ) * 256 + string.byte( data_string, i+1 );
-		i = i + 2;
-		local p2 = string.byte( data_string, p2offset + math.floor(i/2));
-		id = id+1;
+		for y = 1, size.y do
+			for x = 1, size.x do
+				local id = string.byte( data_string, i ) * 256 + string.byte( data_string, i+1 );
+				i = i + 2;
+				local p2 = string.byte( data_string, p2offset + math.floor(i/2));
+				id = id+1;
+				if( id ~= is_air ) then
+					-- use node
+					if( not( scm[y] )) then
+						scm[y] = {};
+					end
+					if( not( scm[y][x] )) then
+						scm[y][x] = {};
+					end
+					scm[y][x][z] = {name_id = id, param2 = p2};
+					nodecount = nodecount + 1
 
-		if( id ~= is_air ) then
-			scm[y][x][z] = {id, p2};
-		end
-	end
-	end
-	end
+					-- adjust position information
+					if not max_pos.x or x > max_pos.x then
+						max_pos.x = x
+					end
+					if not max_pos.y or y > max_pos.y then
+						max_pos.y = y
+					end
+					if not max_pos.z or z > max_pos.z then
+						max_pos.z = z
+					end
+					if not min_pos.x or x < min_pos.x then
+						min_pos.x = x
+					end
+					if not min_pos.y or y < min_pos.y then
+						min_pos.y = y
+					end
+					if not min_pos.z or z < min_pos.z then
+						min_pos.z = z
+					end
 
-	return { size = { x=size.x, y=size.y, z=size.z}, nodenames = nodenames, on_constr = on_constr, after_place_node = after_place_node, rotated=rotated, burried=burried, scm_data_cache = scm };
-end
-
-
-
-handle_schematics.store_mts_file = function( path, data )
-
-	data.nodenames[ #data.nodenames+1 ] = 'air';
-
-	local file, err = save_restore.file_access(path..'.mts', "wb")
-	if (file == nil) then
-		return nil
-	end
-
-	local write_s16 = function( fi, a )
-		fi:write( string.char( math.floor( a/256) ));
-		fi:write( string.char( a%256 ));	
-	end
-
-	data.size.version = 3; -- we only support version 3 of the .mts file format
-
-	file:write( "MTSM" );
-	write_s16( file, data.size.version ); 
-	write_s16( file, data.size.x );
-	write_s16( file, data.size.y );
-	write_s16( file, data.size.z );
-
-	
-	-- set the slice probability for each y value that was introduced in version 3
-	if( data.size.version >= 3 ) then
-		-- the probability is not very intresting for buildings so we just skip it
-		for i=1,data.size.y do
-			file:write( string.char(255) );
+					-- calculate ground_y value
+					if ground_id[id] then
+						groundnode_count = groundnode_count + 1
+						if groundnode_count == 1 then
+							ground_y = y
+						else
+							ground_y = ground_y + (y - ground_y) / groundnode_count
+						end
+					end
+				end
+			end
 		end
 	end
 
-	-- set how many diffrent nodenames (node_name_count) are present in the file
-	write_s16( file, #data.nodenames );
-
-	for i = 1, #data.nodenames do
-		-- the length of the next name
-		write_s16( file, string.len( data.nodenames[ i ] ));
-		file:write( data.nodenames[ i ] );
-	end
-
-	-- this string will later be compressed
-	local node_data = "";
-
-	-- actual node data
-	for z = 1, data.size.z do
-	for y = 1, data.size.y do
-	for x = 1, data.size.x do
-		local a = data.scm_data_cache[y][x][z];
-		if( a and type( a ) == 'table') then
-			node_data = node_data..string.char( math.floor( a[1]/256) )..string.char( a[1]%256-1);	
-		else
-			node_data = node_data..string.char( 0 )..string.char( #data.nodenames-1 );
-		end
-	end
-	end
-	end
-
-	-- probability of occurance
-	for z = 1, data.size.z do
-	for y = 1, data.size.y do
-	for x = 1, data.size.x do
-		node_data = node_data..string.char( 255 );
-	end
-	end
-	end
-
-	-- param2
-	for z = 1, data.size.z do
-	for y = 1, data.size.y do
-	for x = 1, data.size.x do
-		local a = data.scm_data_cache[y][x][z];
-		if( a and type( a) == 'table' ) then
-			node_data = node_data..string.char( a[2] );	
-		else
-			node_data = node_data..string.char( 0 );	
-		end
-	end
-	end
-	end
-
-	local compressed_data = minetest.compress( node_data, "deflate" );
-	file:write( compressed_data );
-	file.close(file);
-	print('SAVING '..path..'.mts (converted from .we).'); 
+	return {	min_pos   = min_pos,    -- minimal {x,y,z} vector
+				max_pos   = max_pos,    -- maximal {x,y,z} vector
+				nodenames = nodenames,  -- nodenames[1] = "default:sample"
+				scm_data_cache = scm,   -- scm[y][x][z] = { name_id, ent.param2 }
+				nodecount = nodecount,  -- integer, count
+				ground_y  = ground_y }  -- average ground high
 end
 
 return handle_schematics

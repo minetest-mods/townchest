@@ -155,7 +155,6 @@ local _build_status = function(state)
 		print("BUG: no plan in build_status dialog!")
 		return false -- no update
 	end
-	local relative = chest.plan.relative
 
 	-- create screen
 	state:size(10,5)
@@ -180,7 +179,7 @@ local _build_status = function(state)
 		end
 		set_dynamic_values()
 		chest:persist_info()
-		chest:run_async(chest.instant_build_chain)
+		chest:run_async(chest.instant_build_chunk)
 	end)
 
 	-- NPC build button
@@ -212,12 +211,14 @@ local _build_status = function(state)
 	elseif chest.info.taskname == "generate" then
 		l1:setText("Simple task: "..chest.info.genblock.variant_name)
 	end
-	l2:setText("Size: "..(relative.max_x-relative.min_x).." x "..(relative.max_z-relative.min_z))
-	l3:setText("Building high: "..(relative.max_y-relative.min_y).."  Ground high: "..(relative.ground_y-relative.min_y))
+	local size = vector.add(vector.subtract(chest.plan.data.max_pos, chest.plan.data.min_pos),1)
+
+	l2:setText("Size: "..size.x.." x "..size.z)
+	l3:setText("Building high: "..size.y.."  Ground high: "..(chest.plan.data.ground_y-chest.plan.data.min_pos.y))
 
 	--update data on demand without rebuild the state
 	set_dynamic_values = function()
-		l4:setText("Nodes to do: "..chest.plan.building_size)
+		l4:setText("Nodes to do: "..chest.plan.data.nodecount)
 
 		if chest.info.npc_build == true then
 			npc_tg:setId(2)

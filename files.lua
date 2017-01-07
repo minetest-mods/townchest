@@ -1,15 +1,13 @@
 local dprint = townchest.dprint_off --debug
 
--- get worldedit parser load_schematic from worldedit mod
-dofile(townchest.modpath.."/".."worldedit-serialization.lua")
-
+files = {}
 
 -----------------------------------------------
 -- get files
 -- no input parameters
 -- returns a table containing buildings
 -----------------------------------------------
-local __get = function()
+function files.get()
 	local files = {}
 	if os.getenv('HOME')~=nil then
 		dprint("use GNU tools to get files")
@@ -37,20 +35,24 @@ end
 -- filename - the building file to load
 -- return - WE-Shema, containing the pos and nodes to build
 -----------------------------------------------
-local __readfile = function(filename)
-	local filepath = townchest.modpath.."/buildings/"..filename
-	local file, err = io.open(filepath, "rb")
-	if err ~= nil then
-		dprint("[townchest] error: could not open file \"" .. filepath .. "\"")
+function files.readfile(filename)
+	local file = townchest.hsl.save_restore.file_access(townchest.modpath.."/buildings/"..filename, "r")
+	if not file then
+		dprint("[townchest] error: could not open file \"" .. filename .. "\"")
 		return
 	end
-	-- load the building starting from the lowest y
-	local building_plan = townchest.we_load_schematic(file:read("*a"))
-	return building_plan
+
+	local building_info
+
+	-- different file types
+	if string.find( filename, '.mts',  -4 ) then
+		return townchest.hsl.analyze_mts.analyze_mts_file(file)
+	end
+	if string.find( filename, '.we',   -3 ) or string.find( filename, '.wem',  -4 ) then
+		return townchest.hsl.analyze_we.analyze_we_file(file)
+	end
 end
 
-
-townchest.files = {
-	get = __get,
-	readfile = __readfile
-}
+------------------------------------------
+-- return the files methods to the caller
+return files

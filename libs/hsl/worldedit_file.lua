@@ -8,7 +8,8 @@
 --  * originx, originy and originz are now passed as parameters to worldedit_file.load_schematic;
 --    they are required for an old file format
 ------------------------------------------------------------------------------------------
-local worldedit_file = {}
+
+local worldedit_file = {} -- add the namespace
 
 --- Schematic serialization and deserialiation.
 -- @module worldedit.serialization
@@ -90,18 +91,15 @@ function worldedit_file.load_schematic(value, we_origin)
 				entry[2] = nil
 			end
 		end
-	elseif version == 3 or version=="3" then -- List format
-		if( not( we_origin ) or #we_origin <3) then
-			we_origin = { 0, 0, 0 };
-		end
+	elseif version == 3 then -- List format
 		for x, y, z, name, param1, param2 in content:gmatch(
 				"([+-]?%d+)%s+([+-]?%d+)%s+([+-]?%d+)%s+" ..
 				"([^%s]+)%s+(%d+)%s+(%d+)[^\r\n]*[\r\n]*") do
 			param1, param2 = tonumber(param1), tonumber(param2)
 			table.insert(nodes, {
-				x = we_origin[1] + tonumber(x),
-				y = we_origin[2] + tonumber(y),
-				z = we_origin[3] + tonumber(z),
+				x = tonumber(x),
+				y = tonumber(y),
+				z = tonumber(z),
 				name = name,
 				param1 = param1 ~= 0 and param1 or nil,
 				param2 = param2 ~= 0 and param2 or nil,

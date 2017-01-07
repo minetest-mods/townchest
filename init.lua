@@ -23,11 +23,11 @@ local smartfs = townchest.smartfs
 dofile(townchest.modpath.."/chest.lua")
 
 -- Reading building files (WorldEdit)
-dofile(townchest.modpath.."/files.lua")
+townchest.files = dofile(townchest.modpath.."/files.lua")
 townchest.hsl = dofile(townchest.modpath.."/libs/hsl/init.lua")
 
 -- Nodes mapping
-dofile(townchest.modpath.."/nodes.lua")
+dofile(townchest.modpath.."/mapping.lua")
 
 -- building plan
 dofile(townchest.modpath.."/plan.lua")

@@ -1,54 +1,73 @@
 local handle_schematics = {}
 
-handle_schematics.analyze_we_file = function(scm, we_origin)
-	local c_ignore = minetest.get_content_id("ignore")
+-- receive parameter modpath
+local modpath = ...
 
-	-- this table will contain the nodes read
-	local nodes = {}
+-- deserialize worldedit savefiles
+local worldedit_file = dofile(modpath.."worldedit_file.lua")
 
-	-- check if it is a worldedit file
-	-- (no idea why reading that is done in such a complicated way; a simple deserialize and iteration over all nodes ought to do as well)
-	local f, err = save_restore.file_access( scm..".we", "r")
-	if not f then
-		f, err = save_restore.file_access( scm..".wem", "r")
-		if not f then
---			error("Could not open schematic '" .. scm .. ".we': " .. err)
-			return nil;
+
+handle_schematics.analyze_we_file = function(file)
+	-- returning parameters
+	local nodenames = {}
+	local scm = {}
+	local all_meta = {}
+	local min_pos = {}
+	local max_pos = {}
+	local ground_y = 0
+	local nodecount = 0
+
+	-- helper
+	local nodes = worldedit_file.load_schematic(file:read("*a"))
+	local nodenames_id = {}
+	local ground_id = {}
+	local groundnode_count = 0
+
+	-- analyze the file
+	for i, ent in ipairs( nodes ) do
+		-- get nodename_id and analyze ground elements
+		local name_id = nodenames_id[ent.name]
+		if not name_id then
+			name_id = #nodenames + 1
+			nodenames_id[ent.name] = name_id
+			nodenames[name_id] = ent.name
+			if string.sub(ent.name, 1, 18) == "default:dirt_with_" or
+					ent.name == "farming:soil_wet" then
+				ground_id[name_id] = true
+			end
 		end
-	end
 
-	local value = f:read("*a")
-	f:close()
+		-- calculate ground_y value
+		if ground_id[name_id] then
+			groundnode_count = groundnode_count + 1
+			if groundnode_count == 1 then
+				ground_y = ent.y
+			else
+				ground_y = ground_y + (ent.y - ground_y) / groundnode_count
+			end
+		end
 
-	local nodes = worldedit_file.load_schematic(value, we_origin)
+		-- adjust position information
+		if not max_pos.x or ent.x > max_pos.x then
+			max_pos.x = ent.x
+		end
+		if not max_pos.y or ent.y > max_pos.y then
+			max_pos.y = ent.y
+		end
+		if not max_pos.z or ent.z > max_pos.z then
+			max_pos.z = ent.z
+		end
+		if not min_pos.x or ent.x < min_pos.x then
+			min_pos.x = ent.x
+		end
+		if not min_pos.y or ent.y < min_pos.y then
+			min_pos.y = ent.y
+		end
+		if not min_pos.z or ent.z < min_pos.z then
+			min_pos.z = ent.z
+		end
 
-	-- create a list of nodenames
-	local nodenames    = {};
-	local nodenames_id = {};
-	for i,ent in ipairs( nodes ) do
-		if( ent and ent.name and not( nodenames_id[ ent.name ])) then
-			nodenames_id[ ent.name ] = #nodenames + 1;
-			nodenames[ nodenames_id[ ent.name ] ] = ent.name;
-		end
-	end
-
-	scm = {}
-	local maxx, maxy, maxz = -1, -1, -1
-	local all_meta = {};
-	for i = 1, #nodes do
-		local ent = nodes[i]
-		ent.x = ent.x + 1
-		ent.y = ent.y + 1
-		ent.z = ent.z + 1
-		if ent.x > maxx then
-			maxx = ent.x
-		end
-		if ent.y > maxy then
-			maxy = ent.y
-		end
-		if ent.z > maxz then
-			maxz = ent.z
-		end
+		-- build to scm data tree
 		if scm[ent.y] == nil then
 			scm[ent.y] = {}
 		end
@@ -58,47 +77,36 @@ handle_schematics.analyze_we_file = function(scm, we_origin)
 		if ent.param2 == nil then
 			ent.param2 = 0
 		end
+
 		-- metadata is only of intrest if it is not empty
 		if( ent.meta and (ent.meta.fields or ent.meta.inventory)) then
-			local has_meta = false;
+			local has_meta = false
 			for _,v in pairs( ent.meta.fields ) do
-				has_meta = true;
+				has_meta = true
+				break
 			end
 			for _,v in pairs(ent.meta.inventory) do
-				has_meta = true;
+				has_meta = true
+				break
 			end
-			if( has_meta == true ) then
-				all_meta[ #all_meta+1 ] = {
-					x=ent.x,
-					y=ent.y,
-					z=ent.z,
-					fields    = ent.meta.fields,
-					inventory = ent.meta.inventory};
+			if has_meta ~= true then
+				ent.meta = nil
 			end
+		else
+			ent.meta = nil
 		end
 
+		scm[ent.y][ent.x][ent.z] = {name_id = name_id, param2 = ent.param2, meta = ent.meta}
 
-		scm[ent.y][ent.x][ent.z] = { nodenames_id[ ent.name ], ent.param2 };
-
+		nodecount = nodecount + 1
 	end
 
-	for y = 1, maxy do
-		if scm[y] == nil then
-			scm[y] = {}
-		end
-		for x = 1, maxx do
-			if scm[y][x] == nil then
-				scm[y][x] = {}
-			end
-		end
-	end
-
-	local size = {};
-	size.y = math.max(maxy,0);
-	size.x = math.max(maxx,0);
-	size.z = math.max(maxz,0);
-
-	return { size = { x=size.x, y=size.y, z=size.z}, nodenames = nodenames, on_constr = {}, after_place_node = {}, rotated=0, burried=0, scm_data_cache = scm, metadata = all_meta };
+	return {	min_pos   = min_pos,    -- minimal {x,y,z} vector
+				max_pos   = max_pos,    -- maximal {x,y,z} vector
+				nodenames = nodenames,  -- nodenames[1] = "default:sample"
+				scm_data_cache = scm,   -- scm[y][x][z] = { name_id=, param2=, meta= }
+				nodecount = nodecount,  -- integer, count
+				ground_y  = ground_y }  -- average ground high
 end
 
 return handle_schematics

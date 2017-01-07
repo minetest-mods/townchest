@@ -1,4 +1,5 @@
-local dprint = townchest.dprint --debug
+local dprint = townchest.dprint_off --debug
+local dprint = townchest.dprint
 
 local MAX_SPEED = 5
 local BUILD_DISTANCE = 3
@@ -59,50 +60,55 @@ local select_chest = function(self)
 end
 
 
-local get_if_buildable = function(self, realpos)
+local get_if_buildable = function(self, realpos, node_prep)
 	local pos = self.chest.plan:get_plan_pos(realpos)
---	dprint("in plan", minetest.pos_to_string(pos))
-	local node = self.chest.plan.building_full[minetest.pos_to_string(pos)]
-	if not node then
-		return nil
+	local node
+	if node_prep then
+		node = node_prep
+	else
+		node = self.chest.plan:prepare_node_for_build(pos, realpos)
 	end
-	-- skip the chest position
-	if realpos.x == self.chest.pos.x and realpos.y == self.chest.pos.y and realpos.z == self.chest.pos.z then --skip chest pos
-		self.chest.plan:set_node_processed(node)
+
+	if not node then
+		-- remove something crufty
+		self.chest.plan:remove_node(pos)
 		return nil
 	end
 
-	-- check if already build (skip the most air)
-	local success = minetest.forceload_block(realpos) --keep the target node loaded
-	if not success then
-		dprint("error forceloading:", minetest.pos_to_string(realpos))
+	-- skip the chest position
+	if realpos.x == self.chest.pos.x and realpos.y == self.chest.pos.y and realpos.z == self.chest.pos.z then --skip chest pos
+		self.chest.plan:remove_node(pos)
+		return nil
 	end
+
+	-- get info about placed node to compare
 	local orig_node = minetest.get_node(realpos)
-	minetest.forceload_free_block(realpos)
 	if orig_node.name == "ignore" then
 		minetest.get_voxel_manip():read_from_map(realpos, realpos)
 		orig_node = minetest.get_node(realpos)
 	end
-	
+
 	if not orig_node or orig_node.name == "ignore" then --not loaded chunk. can be forced by forceload_block before check if buildable
-		dprint("check ignored")
+		dprint("ignore node at", minetest.pos_to_string(realpos))
 		return nil
 	end
+
+	-- check if already built
 	if orig_node.name == node.name or orig_node.name == minetest.registered_nodes[node.name].name then 
 		-- right node is at the place. there are no costs to touch them. Check if a touch needed
 		if (node.param2 ~= orig_node.param2 and not (node.param2 == nil and orig_node.param2  == 0)) then
 			--param2 adjustment
---			node.matname = townchest.nodes.c_free_item -- adjust params for free
+--			node.matname = townchest.mapping.c_free_item -- adjust params for free
 			return node
 		elseif not node.meta then
 			--same item without metadata. nothing to do
-			self.chest.plan:set_node_processed(node)
+			self.chest.plan:remove_node(pos)
 			return nil
-		elseif townchest.nodes.is_equal_meta(minetest.get_meta(realpos):to_table(), node.meta) then
+		elseif townchest.mapping.is_equal_meta(minetest.get_meta(realpos):to_table(), node.meta) then
 			--metadata adjustment
-			self.chest.plan:set_node_processed(node)
+			self.chest.plan:remove_node(pos)
 			return nil
-		elseif node.matname == townchest.nodes.c_free_item then
+		elseif node.matname == townchest.mapping.c_free_item then
 			-- TODO: check if nearly nodes are already built
 			return node
 		else
@@ -141,14 +147,14 @@ local function prefer_target(npc, t1, t2)
 
 	-- prefer the last target node
 	if npc.targetnode then
-		if t1.x == npc.targetnode.pos.x and
-				t1.y == npc.targetnode.pos.y and
-				t1.z == npc.targetnode.pos.z then
+		if t1.pos.x == npc.targetnode.pos.x and
+				t1.pos.y == npc.targetnode.pos.y and
+				t1.pos.z == npc.targetnode.pos.z then
 			prefer = prefer + BUILD_DISTANCE
 		end
-		if t2.x == npc.targetnode.pos.x and
-				t2.y == npc.targetnode.pos.y and
-				t2.z == npc.targetnode.pos.z then
+		if t2.pos.x == npc.targetnode.pos.x and
+				t2.pos.y == npc.targetnode.pos.y and
+				t2.pos.z == npc.targetnode.pos.z then
 			prefer = prefer - BUILD_DISTANCE
 		end
 	end
@@ -161,9 +167,17 @@ local function prefer_target(npc, t1, t2)
 		prefer = prefer - 2
 	end
 
+	-- prefer reachable in general
+	if vector.distance(npcpos, t1.pos) <= BUILD_DISTANCE then
+		prefer = prefer + 2
+	end
+	if vector.distance(npcpos, t2.pos) <= BUILD_DISTANCE then
+		prefer = prefer - 2
+	end
+
 	-- prefer lower node if not air
 	if t1.name ~= "air" then
-		t1_c.y = t1_c.y + 1
+		t1_c.y = t1_c.y + 2
 	elseif math.abs(npcpos.y - t1.pos.y) <= BUILD_DISTANCE then
 		-- prefer higher node if air in reachable distance
 		t1_c.y = t1_c.y - 4
@@ -171,7 +185,7 @@ local function prefer_target(npc, t1, t2)
 
 	-- prefer lower node if not air
 	if t2.name ~= "air" then
-		t2_c.y = t2_c.y + 1
+		t2_c.y = t2_c.y + 2
 	elseif math.abs(npcpos.y - t1.pos.y) <= BUILD_DISTANCE then
 		-- prefer higher node if air in reachable distance
 		t2_c.y = t2_c.y - 4
@@ -179,12 +193,12 @@ local function prefer_target(npc, t1, t2)
 
 	-- avoid build directly under or in the npc
 	if math.abs(npcpos.x - t1.pos.x) < 0.5 and
-			math.abs(npcpos.y - t1.pos.y) < 2 and
+			math.abs(npcpos.y - t1.pos.y) < 3 and
 			math.abs(npcpos.z - t1.pos.z) < 0.5 then
 		prefer = prefer-1.5
 	end
 	if math.abs(npcpos.x - t2.pos.x) < 0.5 and
-			math.abs(npcpos.y - t1.pos.y) < 2 and
+			math.abs(npcpos.y - t1.pos.y) < 3 and
 			math.abs(npcpos.z - t2.pos.z) < 0.5 then
 		prefer = prefer+1.5
 	end
@@ -203,74 +217,97 @@ local get_target = function(self)
 	local npcpos = self.object:getpos()
 	local plan = self.chest.plan
 	npcpos.y = npcpos.y - 1.5  -- npc is 1.5 blocks over the work
+
+	local npcpos_round = vector.round(npcpos)
 	local selectednode
 
 	-- first try: look for nearly buildable nodes
 	dprint("search for nearly node")
-	for x=math.floor(npcpos.x)-5, math.floor(npcpos.x)+5 do
-		for y=math.floor(npcpos.y)-5, math.floor(npcpos.y)+5 do
-			for z=math.floor(npcpos.z)-5, math.floor(npcpos.z)+5 do
+	for x=npcpos_round.x-5, npcpos_round.x+5 do
+		for y=npcpos_round.y-5, npcpos_round.y+5 do
+			for z=npcpos_round.z-5, npcpos_round.z+5 do
 				local node = get_if_buildable(self,{x=x,y=y,z=z})
 				if node then
-					node.pos = plan:get_world_pos(node)
+					node.pos = {x=x,y=y,z=z}
 					selectednode = prefer_target(self, selectednode, node)
 				end
 			end
 		end
 	end
-	
+	if selectednode then
+		dprint("nearly found: NPC: "..minetest.pos_to_string(npcpos).." Block "..minetest.pos_to_string(selectednode.pos))
+	end
+
 	if not selectednode then
-	-- get the old target to compare
-		if self.targetnode and self.targetnode.pos then
-			selectednode = get_if_buildable(self, self.targetnode.pos)
+		dprint("nearly nothing found")
+		-- get the old target to compare
+		if self.targetnode and self.targetnode.pos and
+				(self.targetnode.node_id or self.targetnode.name) then
+			selectednode = get_if_buildable(self, self.targetnode.pos, self.targetnode)
 		end
 	end
 
 	-- second try. Check the current chunk
 	dprint("search for node in current chunk")
-	for idx, nodeplan in ipairs(plan:get_nodes_from_chunk(plan:get_plan_pos(npcpos))) do
-		local node = get_if_buildable(self, plan:get_world_pos(nodeplan))
+
+	local chunk_nodes = plan:get_nodes_for_chunk(plan:get_plan_pos(npcpos_round))
+	dprint("Chunk loaeded: nodes:", #chunk_nodes)
+
+	for idx, nodeplan in ipairs(chunk_nodes) do
+		local wpos = plan:get_world_pos(nodeplan)
+		local node = get_if_buildable(self, wpos, nodeplan.node)
 		if node then
-			node.pos = plan:get_world_pos(node)
+			node.pos = wpos
 			selectednode = prefer_target(self, selectednode, node)
 		end
 	end
 
+	if selectednode then
+		dprint("found in current chunk: NPC: "..minetest.pos_to_string(npcpos).." Block "..minetest.pos_to_string(selectednode.pos))
+	end
+
 	if not selectednode then
-		--get anything - with forceloading, so the NPC can go away
-		dprint("get node with random jump")
-		local jump = plan.building_size
-		if jump > 1000 then
-			jump = 1000
-		end
-		if jump > 1 then
-			jump = math.floor(math.random(jump))
-		else
-			jump = 0
-		end
-		
-		local startingnode = plan:get_nodes(1,jump)
-		if startingnode[1] then -- the one node given
-			dprint("---check chunk", minetest.pos_to_string(startingnode[1]))
-			for idx, nodeplan in ipairs(plan:get_nodes_from_chunk(startingnode[1])) do
-				local node_wp = plan:get_world_pos(nodeplan)
-				local node = get_if_buildable(self, node_wp)
-				if node then
-					node.pos = node_wp
-					selectednode = prefer_target(self, selectednode, node)
+		dprint("get random node")
+
+		local random_pos = plan:get_random_node_pos()
+		if random_pos then
+			dprint("---check chunk", minetest.pos_to_string(random_pos))
+			local wpos = plan:get_world_pos(random_pos)
+			local node = get_if_buildable(self, wpos)
+			if node then
+				node.pos = wpos
+				selectednode = prefer_target(self, selectednode, node)
+			end
+
+			if selectednode then
+				dprint("random node: Block "..minetest.pos_to_string(random_pos))
+			else
+				dprint("random node not buildable, check the whole chunk", minetest.pos_to_string(random_pos))
+				local chunk_nodes = plan:get_nodes_for_chunk(plan:get_plan_pos(random_pos))
+				dprint("Chunk loaeded: nodes:", #chunk_nodes)
+
+				for idx, nodeplan in ipairs(chunk_nodes) do
+					local node = get_if_buildable(self, plan:get_world_pos(nodeplan), nodeplan.node)
+					if node then
+						node.pos = plan:get_world_pos(node)
+						selectednode = prefer_target(self, selectednode, node)
+					end
+				end
+				if selectednode then
+					dprint("found in current chunk: Block "..minetest.pos_to_string(selectednode.pos))
 				end
 			end
 		else
-			dprint("something wrong with startningnode")
+			dprint("something wrong with random_pos")
 		end
 	end
 
 	if selectednode then
-		selectednode.pos = plan:get_world_pos(selectednode)
+		assert(selectednode.pos, "BUG: a position should exists")
 		return selectednode
 	else
-		dprint("no next node found", plan.building_size)
-		if plan.building_size == 0 then
+		dprint("no next node found", plan.data.nodecount)
+		if plan.data.nodecount == 0 then
 			self.chest.info.npc_build = false
 		end
 		self.chest:update_statistics()
@@ -287,7 +324,7 @@ npcf:register_npc("townchest:npcf_builder" ,{
 			self.timer = 0
 			select_chest(self)
 			self.target_prev = self.targetnode
-			if self.chest and self.chest.plan and self.chest.plan.building_size > 0 then
+			if self.chest and self.chest.plan and self.chest.plan.data.nodecount > 0 then
 				self.targetnode = get_target(self)
 				self.dest_type = "build"
 			else
@@ -328,7 +365,8 @@ npcf:register_npc("townchest:npcf_builder" ,{
 			yaw = npcf:get_face_direction(pos, self.targetnode.pos)
 			-- target reached build
 			if target_distance <= BUILD_DISTANCE and self.dest_type == "build" then
-				-- do the build
+				dprint("target reached - build", self.targetnode.name, minetest.pos_to_string(self.targetnode.pos))
+				-- do the build  ---TODO: move outsite of this function
 				local soundspec
 				if minetest.registered_items[self.targetnode.name].sounds then
 					soundspec = minetest.registered_items[self.targetnode.name].sounds.place
@@ -343,7 +381,7 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				if self.targetnode.meta then
 					minetest.env:get_meta(self.targetnode.pos):from_table(self.targetnode.meta)
 				end
-				self.chest.plan:set_node_processed(self.targetnode)
+				self.chest.plan:remove_node(self.targetnode)
 				self.chest:update_statistics()
 
 				local cur_pos = {x=pos.x, y=pos.y - 0.5, z=pos.z}
@@ -373,8 +411,10 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				self.dest_type = "home_reached"
 				self.targetnode = nil
 			else
-				--target not reached
+				--target not reached -- route
 				state = NPCF_ANIM_WALK
+				self.path = minetest.find_path(pos, self.targetnode.pos, 10, 1, 5, "A*")
+
 				-- Big jump / teleport upsite
 				if (self.targetnode.pos.y -(pos.y-1.5)) > BUILD_DISTANCE and
 						math.abs(self.targetnode.pos.x - pos.x) <= 0.5 and
@@ -388,14 +428,19 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				end
 
 				-- teleport in direction in case of stucking
-				if (last_distance - 0.01) <= target_distance and self.laststep == "walk" and 
-						(self.target_prev == self.targetnode) then
+				dprint("check for stuck:", last_distance, target_distance, self.laststep)
+				if not self.path and --no stuck if path known
+						(last_distance - 0.01) <= target_distance and -- stucking
+						self.laststep == "walk" and -- second step stuck
+						self.target_prev and
+						( minetest.pos_to_string(self.target_prev.pos) == minetest.pos_to_string(self.targetnode.pos)) then -- destination unchanged
 					local target_direcion = vector.direction(pos, self.targetnode.pos)
 					pos = vector.add(pos, vector.multiply(target_direcion, 2))
 					if pos.y < self.targetnode.pos.y then
 						pos = {x=pos.x, y=self.targetnode.pos.y + 1.5, z=pos.z}
 					end
 					self.object:setpos(pos)
+					self.laststep = "teleport"
 					acceleration = {x=0, y=0, z=0}
 					target_distance = 0 -- to skip the next part and set speed to 0
 					state = NPCF_ANIM_STAND
@@ -407,6 +452,10 @@ npcf:register_npc("townchest:npcf_builder" ,{
 			end
 		else
 			dprint("no target")
+		end
+
+		if self.path then
+			yaw = npcf:get_face_direction(pos, self.path[1])
 		end
 		self.object:setacceleration(acceleration)
 		self.object:setvelocity(npcf:get_walk_velocity(speed, self.object:getvelocity().y, yaw))
