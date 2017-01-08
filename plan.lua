@@ -10,13 +10,13 @@ townchest.plan.new = function( chest )
 	-- helper: get scm entry for position
 	function self.get_scm_node(self, pos)
 		assert(pos.x, "pos without xyz")
-		if not self.data.scm_data_cache[pos.y] then
+		if self.data.scm_data_cache[pos.y] == nil then
 			return nil
 		end
-		if not self.data.scm_data_cache[pos.y][pos.x] then
+		if self.data.scm_data_cache[pos.y][pos.x] == nil then
 			return nil
 		end
-		if not self.data.scm_data_cache[pos.y][pos.x][pos.z] then
+		if self.data.scm_data_cache[pos.y][pos.x][pos.z] == nil then
 			return nil
 		end
 		return self.data.scm_data_cache[pos.y][pos.x][pos.z]
@@ -61,7 +61,7 @@ townchest.plan.new = function( chest )
 			for x = self.data.min_pos.x - additional, self.data.max_pos.x + additional do
 				for z = self.data.min_pos.z - additional, self.data.max_pos.z + additional do
 					local airnode = {x=x, y=y, z=z, name_id=air_id}
-					if not self:get_scm_node(airnode) then
+					if self:get_scm_node(airnode) == nil then
 						self:add_node(airnode)
 					end
 				end
@@ -110,13 +110,14 @@ townchest.plan.new = function( chest )
 		for k in pairs(self.data.scm_data_cache[y][x]) do table.insert(keyset, k) end
 		local z = keyset[math.random(#keyset)]
 
-		if z then
+		if z ~= nil then
 			return {x=x,y=y,z=z}
 		end
 	end
 
 -- to be able working with forceload chunks
 	function self.get_nodes_for_chunk(self, node)
+--[[
 	-- calculate the begin of the chunk
 		--local BLOCKSIZE = core.MAP_BLOCKSIZE
 		local BLOCKSIZE = 16
@@ -124,18 +125,24 @@ townchest.plan.new = function( chest )
 		wpos.x = (math.floor(wpos.x/BLOCKSIZE))*BLOCKSIZE
 		wpos.y = (math.floor(wpos.y/BLOCKSIZE))*BLOCKSIZE
 		wpos.z = (math.floor(wpos.z/BLOCKSIZE))*BLOCKSIZE
+]]
+		local posp = self:get_world_pos(node)
+		local vm = minetest.get_voxel_manip()
+		local minp, maxp = vm:read_from_map(posp, posp)
+		dprint("nodes for chunk (real-pos)", minetest.pos_to_string(minp), minetest.pos_to_string(maxp))
 
-		dprint("nodes for chunk (wpos)", wpos.x, wpos.y, wpos.z)
-		local vpos = self:get_plan_pos(wpos)
-		dprint("nodes for chunk (vpos)", vpos.x, vpos.y, vpos.z)
+		local minv = self:get_plan_pos(minp)
+		local maxv = self:get_plan_pos(maxp)
+		dprint("nodes for chunk (plan-pos)", minetest.pos_to_string(minv), minetest.pos_to_string(maxv))
 
 		local ret = {}
-		for y = vpos.y, vpos.y + BLOCKSIZE do
-			if self.data.scm_data_cache[y] then
-				for x = vpos.x, vpos.x + BLOCKSIZE do
-					if self.data.scm_data_cache[y][x] then
-						for z = vpos.z, vpos.z + BLOCKSIZE do
-							if self.data.scm_data_cache[y][x][z] then
+		for y = minv.y, maxv.y do
+			if self.data.scm_data_cache[y] ~= nil then
+				for x = minv.x, maxv.x do
+					if self.data.scm_data_cache[y][x] ~= nil then
+						for z = minv.z, maxv.z do
+							if self.data.scm_data_cache[y][x][z] ~= nil then
+								wpos = self:get_world_pos({x=x,y=y,z=z})
 								table.insert(ret, {x=x,y=y,z=z, node=self:prepare_node_for_build({x=x,y=y,z=z}, wpos)})
 							end
 						end
@@ -143,14 +150,15 @@ townchest.plan.new = function( chest )
 				end
 			end
 		end
+		dprint("nodes in chunk to build", #ret)
 		return ret
 	end
 
 	function self.remove_node(self, pos)
 		-- cleanup raw data
-		if self.data.scm_data_cache[pos.y] then
-			if self.data.scm_data_cache[pos.y][pos.x]then
-				if self.data.scm_data_cache[pos.y][pos.x][pos.z] then
+		if self.data.scm_data_cache[pos.y] ~= nil then
+			if self.data.scm_data_cache[pos.y][pos.x] ~= nil then
+				if self.data.scm_data_cache[pos.y][pos.x][pos.z] ~= nil then
 					self.data.nodecount = self.data.nodecount - 1
 					self.data.scm_data_cache[pos.y][pos.x][pos.z] = nil
 				end
@@ -164,9 +172,9 @@ townchest.plan.new = function( chest )
 		end
 
 		-- remove cached mapping data
-		if self.data.prepared_cache and self.data.prepared_cache[pos.y] then
+		if self.data.prepared_cache and self.data.prepared_cache[pos.y] ~= nil then
 			if self.data.prepared_cache[pos.y][pos.x]then
-				if self.data.prepared_cache[pos.y][pos.x][pos.z] then
+				if self.data.prepared_cache[pos.y][pos.x][pos.z] ~= nil then
 					self.data.prepared_cache[pos.y][pos.x][pos.z] = nil
 				end
 				if next(self.data.prepared_cache[pos.y][pos.x]) == nil then
@@ -183,33 +191,33 @@ townchest.plan.new = function( chest )
 	-- prepare node for build
 	function self.prepare_node_for_build(self, pos, wpos)
 		-- first run, generate mapping data
-		if not self.data.mappednodes then
+		if self.data.mappednodes == nil then
 			townchest.mapping.do_mapping(self.data)
 		end
 
 		-- get from cache
-		if self.data.prepared_cache and
-				self.data.prepared_cache[pos.y] and
-				self.data.prepared_cache[pos.y][pos.x] and
-				self.data.prepared_cache[pos.y][pos.x][pos.z] then
+		if self.data.prepared_cache ~= nil and
+				self.data.prepared_cache[pos.y] ~= nil and
+				self.data.prepared_cache[pos.y][pos.x] ~= nil and
+				self.data.prepared_cache[pos.y][pos.x][pos.z] ~= nil then
 			return self.data.prepared_cache[pos.y][pos.x][pos.z]
 		end
 
 		-- get scm data
 		local scm_node = self:get_scm_node(pos)
-		if not scm_node then
+		if scm_node == nil then
 			return nil
 		end
 
 		--get mapping data
 		local map = self.data.mappednodes[scm_node.name_id]
-		if not map then
+		if map == nil then
 			return nil
 		end
 
 		local node = townchest.mapping.merge_map_entry(map, scm_node)
 
-		if node.custom_function then
+		if node.custom_function ~= nil then
 			node.custom_function(node, pos, wpos)
 		end
 

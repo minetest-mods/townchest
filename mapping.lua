@@ -1,5 +1,5 @@
---local dprint = townchest.dprint_off --debug
-local dprint = townchest.dprint
+local dprint = townchest.dprint_off --debug
+--local dprint = townchest.dprint
 
 
 local mapping = {}

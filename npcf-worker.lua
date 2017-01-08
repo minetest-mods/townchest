@@ -1,5 +1,5 @@
 local dprint = townchest.dprint_off --debug
-local dprint = townchest.dprint
+--local dprint = townchest.dprint
 
 local MAX_SPEED = 5
 local BUILD_DISTANCE = 3
@@ -283,13 +283,13 @@ local get_target = function(self)
 				dprint("random node: Block "..minetest.pos_to_string(random_pos))
 			else
 				dprint("random node not buildable, check the whole chunk", minetest.pos_to_string(random_pos))
-				local chunk_nodes = plan:get_nodes_for_chunk(plan:get_plan_pos(random_pos))
+				local chunk_nodes = plan:get_nodes_for_chunk(random_pos)
 				dprint("Chunk loaeded: nodes:", #chunk_nodes)
 
 				for idx, nodeplan in ipairs(chunk_nodes) do
 					local node = get_if_buildable(self, plan:get_world_pos(nodeplan), nodeplan.node)
 					if node then
-						node.pos = plan:get_world_pos(node)
+						node.pos = plan:get_world_pos(nodeplan)
 						selectednode = prefer_target(self, selectednode, node)
 					end
 				end
@@ -346,10 +346,6 @@ npcf:register_npc("townchest:npcf_builder" ,{
 			return
 		end
 
-		if not self.targetnode then
-			return
-		end
-
 		local pos = self.object:getpos()
 		local yaw = self.object:getyaw()
 		local state = NPCF_ANIM_STAND
@@ -403,6 +399,7 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				self.lastnode = self.targetnode
 				self.laststep = "build"
 				self.targetnode = nil
+				self.path = nil
 			-- home reached
 			elseif target_distance < 4 and self.dest_type == "home" then
 --				self.object:setpos(self.origin.pos)
@@ -410,11 +407,10 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				speed = 0
 				self.dest_type = "home_reached"
 				self.targetnode = nil
+				self.path = nil
 			else
 				--target not reached -- route
 				state = NPCF_ANIM_WALK
-				self.path = minetest.find_path(pos, self.targetnode.pos, 10, 1, 5, "A*")
-
 				-- Big jump / teleport upsite
 				if (self.targetnode.pos.y -(pos.y-1.5)) > BUILD_DISTANCE and
 						math.abs(self.targetnode.pos.x - pos.x) <= 0.5 and
@@ -424,7 +420,12 @@ npcf:register_npc("townchest:npcf_builder" ,{
 					self.object:setpos(pos)
 					target_distance = 0 -- to skip the next part and set speed to 0
 					state = NPCF_ANIM_STAND
+					self.path = nil
 					dprint("Big jump to"..minetest.pos_to_string(pos))
+				end
+
+				if self.timer == 0 or not self.path then
+					self.path = minetest.find_path(pos, self.targetnode.pos, 10, 1, 5, "A*")
 				end
 
 				-- teleport in direction in case of stucking
@@ -444,14 +445,13 @@ npcf:register_npc("townchest:npcf_builder" ,{
 					acceleration = {x=0, y=0, z=0}
 					target_distance = 0 -- to skip the next part and set speed to 0
 					state = NPCF_ANIM_STAND
+					self.path = nil
 					dprint("Teleport to"..minetest.pos_to_string(pos))
 				end
 				self.var.last_pos = pos
 				speed = get_speed(target_distance)
 				self.laststep = "walk"
 			end
-		else
-			dprint("no target")
 		end
 
 		if self.path then
