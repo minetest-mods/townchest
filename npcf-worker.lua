@@ -3,6 +3,7 @@ local dprint = townchest.dprint_off --debug
 
 local MAX_SPEED = 5
 local BUILD_DISTANCE = 3
+local HOME_RANGE = 10
 
 
 townchest.npc = {
@@ -51,6 +52,13 @@ local select_chest = function(self)
 			self.metadata.chestpos = selectedchest.pos
 			self.chest = selectedchest
 			dprint("Now I will build for chest",self.chest)
+
+			-- the chest is the new home of npc
+			if vector.distance(self.origin.pos, selectedchest.pos) > HOME_RANGE then
+				self.origin.pos = selectedchest.pos
+				self.origin.yaw = npcf:get_face_direction(npcpos, selectedchest.pos)
+			end
+
 		else --stay if no chest assigned
 			self.metadata.chestpos = nil
 			self.chest = nil
@@ -400,7 +408,7 @@ npcf:register_npc("townchest:npcf_builder" ,{
 				self.targetnode = nil
 				self.path = nil
 			-- home reached
-			elseif target_distance < 4 and self.dest_type == "home" then
+			elseif target_distance < HOME_RANGE and self.dest_type == "home" then
 --				self.object:setpos(self.origin.pos)
 				yaw = self.origin.yaw
 				speed = 0

@@ -14,7 +14,7 @@ handle_schematics.analyze_we_file = function(file)
 	local all_meta = {}
 	local min_pos = {}
 	local max_pos = {}
-	local ground_y = 0
+	local ground_y = -1 --if nothing defined, it is under the building
 	local nodecount = 0
 
 	-- helper

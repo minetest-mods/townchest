@@ -104,7 +104,7 @@ handle_schematics.analyze_mts_file = function(file)
 	local min_pos = {}
 	local max_pos = {}
 	local nodecount = 0
-	local ground_y = 0
+	local ground_y = -1 --if nothing defined, it is under the building
 	local groundnode_count = 0
 
 	for z = 1, size.z do

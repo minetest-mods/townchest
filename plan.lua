@@ -35,6 +35,40 @@ townchest.plan.new = function( chest )
 		self.data.scm_data_cache[node.y][node.x][node.z] = node
 	end
 
+	function self.remove_node(self, pos)
+		-- cleanup raw data
+		if self.data.scm_data_cache[pos.y] ~= nil then
+			if self.data.scm_data_cache[pos.y][pos.x] ~= nil then
+				if self.data.scm_data_cache[pos.y][pos.x][pos.z] ~= nil then
+					self.data.nodecount = self.data.nodecount - 1
+					self.data.scm_data_cache[pos.y][pos.x][pos.z] = nil
+				end
+				if next(self.data.scm_data_cache[pos.y][pos.x]) == nil then
+					self.data.scm_data_cache[pos.y][pos.x] = nil
+				end
+			end
+			if next(self.data.scm_data_cache[pos.y]) == nil then
+				self.data.scm_data_cache[pos.y] = nil
+			end
+		end
+
+		-- remove cached mapping data
+		if self.data.prepared_cache and self.data.prepared_cache[pos.y] ~= nil then
+			if self.data.prepared_cache[pos.y][pos.x]then
+				if self.data.prepared_cache[pos.y][pos.x][pos.z] ~= nil then
+					self.data.prepared_cache[pos.y][pos.x][pos.z] = nil
+				end
+				if next(self.data.prepared_cache[pos.y][pos.x]) == nil then
+					self.data.prepared_cache[pos.y][pos.x] = nil
+				end
+			end
+			if next(self.data.prepared_cache[pos.y]) == nil then
+				self.data.prepared_cache[pos.y] = nil
+			end
+		end
+	end
+
+
 
 	function self.flood_with_air(self)
 		self.data.ground_y =  math.floor(self.data.ground_y)
@@ -153,40 +187,6 @@ townchest.plan.new = function( chest )
 		dprint("nodes in chunk to build", #ret)
 		return ret
 	end
-
-	function self.remove_node(self, pos)
-		-- cleanup raw data
-		if self.data.scm_data_cache[pos.y] ~= nil then
-			if self.data.scm_data_cache[pos.y][pos.x] ~= nil then
-				if self.data.scm_data_cache[pos.y][pos.x][pos.z] ~= nil then
-					self.data.nodecount = self.data.nodecount - 1
-					self.data.scm_data_cache[pos.y][pos.x][pos.z] = nil
-				end
-				if next(self.data.scm_data_cache[pos.y][pos.x]) == nil then
-					self.data.scm_data_cache[pos.y][pos.x] = nil
-				end
-			end
-			if next(self.data.scm_data_cache[pos.y]) == nil then
-				self.data.scm_data_cache[pos.y] = nil
-			end
-		end
-
-		-- remove cached mapping data
-		if self.data.prepared_cache and self.data.prepared_cache[pos.y] ~= nil then
-			if self.data.prepared_cache[pos.y][pos.x]then
-				if self.data.prepared_cache[pos.y][pos.x][pos.z] ~= nil then
-					self.data.prepared_cache[pos.y][pos.x][pos.z] = nil
-				end
-				if next(self.data.prepared_cache[pos.y][pos.x]) == nil then
-					self.data.prepared_cache[pos.y][pos.x] = nil
-				end
-			end
-			if next(self.data.prepared_cache[pos.y]) == nil then
-				self.data.prepared_cache[pos.y] = nil
-			end
-		end
-	end
-
 
 	-- prepare node for build
 	function self.prepare_node_for_build(self, pos, wpos)
