@@ -293,19 +293,16 @@ townchest.chest.new = function()
 		-- implementation using usual "add_node"
 		local chunk_nodes = self.plan:get_nodes_for_chunk(self.plan:get_plan_pos(chunk_pos))
 		dprint("Instant build of chunk: nodes:", #chunk_nodes)
-
 		for idx, nodeplan in ipairs(chunk_nodes) do
-			local wpos = self.plan:get_world_pos(nodeplan)
-			if wpos.x ~= self.pos.x or wpos.y ~= self.pos.y or wpos.z ~= self.pos.z then --skip chest pos
-				local node = self.plan:prepare_node_for_build(nodeplan, wpos)
-				if node then
-					minetest.env:add_node(wpos, node)
-					if node.meta then
-						minetest.env:get_meta(wpos):from_table(node.meta)
+			if nodeplan.wpos.x ~= self.pos.x or nodeplan.wpos.y ~= self.pos.y or nodeplan.wpos.z ~= self.pos.z then --skip chest pos
+				if nodeplan.node then
+					minetest.env:add_node(nodeplan.wpos, nodeplan.node)
+					if nodeplan.node.meta then
+						minetest.env:get_meta(nodeplan.wpos):from_table(nodeplan.node.meta)
 					end
 				end
 			end
-			self.plan:remove_node(nodeplan)
+			self.plan:remove_node(nodeplan.pos)
 		end
 
 		-- chunk done handle next chunk call

@@ -254,10 +254,9 @@ local get_target = function(self)
 	dprint("Chunk loaeded: nodes:", #chunk_nodes)
 
 	for idx, nodeplan in ipairs(chunk_nodes) do
-		local wpos = plan:get_world_pos(nodeplan)
-		local node = get_if_buildable(self, wpos, nodeplan.node)
+		local node = get_if_buildable(self, nodeplan.wpos, nodeplan.node)
 		if node then
-			node.pos = wpos
+			node.pos = nodeplan.wpos
 			selectednode = prefer_target(self, selectednode, node)
 		end
 	end
@@ -287,9 +286,9 @@ local get_target = function(self)
 				dprint("Chunk loaeded: nodes:", #chunk_nodes)
 
 				for idx, nodeplan in ipairs(chunk_nodes) do
-					local node = get_if_buildable(self, plan:get_world_pos(nodeplan), nodeplan.node)
+					local node = get_if_buildable(self, nodeplan.wpos, nodeplan.node)
 					if node then
-						node.pos = plan:get_world_pos(nodeplan)
+						node.pos = nodeplan.wpos
 						selectednode = prefer_target(self, selectednode, node)
 					end
 				end

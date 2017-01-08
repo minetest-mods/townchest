@@ -117,18 +117,17 @@ townchest.plan.new = function( chest )
 
 -- to be able working with forceload chunks
 	function self.get_nodes_for_chunk(self, node)
---[[
+
 	-- calculate the begin of the chunk
 		--local BLOCKSIZE = core.MAP_BLOCKSIZE
 		local BLOCKSIZE = 16
 		local wpos = self:get_world_pos(node)
-		wpos.x = (math.floor(wpos.x/BLOCKSIZE))*BLOCKSIZE
-		wpos.y = (math.floor(wpos.y/BLOCKSIZE))*BLOCKSIZE
-		wpos.z = (math.floor(wpos.z/BLOCKSIZE))*BLOCKSIZE
-]]
-		local posp = self:get_world_pos(node)
-		local vm = minetest.get_voxel_manip()
-		local minp, maxp = vm:read_from_map(posp, posp)
+		local minp = {}
+		minp.x = (math.floor(wpos.x/BLOCKSIZE))*BLOCKSIZE
+		minp.y = (math.floor(wpos.y/BLOCKSIZE))*BLOCKSIZE
+		minp.z = (math.floor(wpos.z/BLOCKSIZE))*BLOCKSIZE
+		local maxp = vector.add(minp, 16)
+
 		dprint("nodes for chunk (real-pos)", minetest.pos_to_string(minp), minetest.pos_to_string(maxp))
 
 		local minv = self:get_plan_pos(minp)
@@ -142,8 +141,9 @@ townchest.plan.new = function( chest )
 					if self.data.scm_data_cache[y][x] ~= nil then
 						for z = minv.z, maxv.z do
 							if self.data.scm_data_cache[y][x][z] ~= nil then
-								wpos = self:get_world_pos({x=x,y=y,z=z})
-								table.insert(ret, {x=x,y=y,z=z, node=self:prepare_node_for_build({x=x,y=y,z=z}, wpos)})
+								local pos = {x=x,y=y,z=z}
+								local wpos = self:get_world_pos(pos)
+								table.insert(ret, {pos = pos, wpos = wpos, node=self:prepare_node_for_build(pos, wpos)})
 							end
 						end
 					end

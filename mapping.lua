@@ -95,19 +95,21 @@ c["default:dirt_with_dry_grass"] = { cost_item = "default:dirt" }
 c["default:dirt_with_grass"]     = { cost_item = "default:dirt" }
 c["default:dirt_with_snow"]      = { cost_item = "default:dirt" }
 
+c["xpanes:pane_5"]               = { name = "xpanes:pane_flat", param2 = 0 } --unsure
+c["xpanes:pane_10"]              = { name = "xpanes:pane_flat", param2 = 1 } --unsure
 
 -----------------------------------------------
 -- copy table of mapping entry
 -----------------------------------------------
 function mapping.merge_map_entry(entry1, entry2)
 	if entry2 then
-		return {name = entry1.name or entry2.name, --not a typo: used to merge fallback to mapped data. The mapped data is preferred
+		return {name = entry1.name or entry2.name,
 				node_def = entry1.node_def or entry2.node_def,
 				content_id = entry1.content_id or entry2.content_id,
-				param2 = entry2.param2 or entry1.param2,
-				meta = entry2.meta or entry1.meta,
-				custom_function = entry2.custom_function or entry1.custom_function,
-				cost_item = entry2.cost_item or entry1.cost_item,
+				param2 = entry1.param2 or entry2.param2,
+				meta = entry1.meta or entry2.meta,
+				custom_function = entry1.custom_function or entry2.custom_function,
+				cost_item = entry1.cost_item or entry2.cost_item,
 				}
 	else
 		return {name = entry1.name,
@@ -208,7 +210,6 @@ function mapping.map_name(name)
 	mr.node_def = minetest.registered_nodes[mr.name]
 
 	-- determine cost_item
-	dprint("map", name, "to", mr.name, mr.cost_item)
 	if not mr.cost_item then
 
 		--Check for price or if it is free
@@ -234,6 +235,7 @@ function mapping.map_name(name)
 	end
 
 	mr.content_id = minetest.get_content_id(mr.name)
+	dprint("map", name, "to", mr.name, mr.param2, mr.cost_item)
 	return mr
 end
 
