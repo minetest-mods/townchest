@@ -46,9 +46,7 @@ end
 
 
 save_restore.create_schems_directory = function()
-
 	local directory = minetest.get_worldpath()..'/schems';
-
 	if( not( save_restore.file_exists( directory ))) then
 		if( minetest.mkdir ) then
 			minetest.mkdir( directory );
@@ -69,6 +67,7 @@ if( minetest.request_insecure_environment ) then
 		ie_io_open = ie.io.open;
 	end
 end
+
 
 -- only a certain type of files can be read and written
 save_restore.file_access = function( path, params )
