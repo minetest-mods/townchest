@@ -8,18 +8,9 @@ files = {}
 -- returns a table containing buildings
 -----------------------------------------------
 function files.get()
-	local files = {}
-	if os.getenv('HOME')~=nil then
-		dprint("use GNU tools to get files")
----		files = io.popen('ls -a "'..townchest.modpath..'/buildings/"'):lines() -- linux/mac native "ls -a"
-		files = io.popen('cd "'..townchest.modpath..'/buildings/"; find * -type f'):lines() -- linux/mac native "find"
-	else
-		dprint("use DOS to get files")
-		files = io.popen('dir "'..townchest.modpath..'\\buildings\\*.*" /b'):lines() --windows native "dir /b"
-	end
-
+	local files = minetest.get_dir_list(townchest.modpath..'/buildings/', false) or {}
 	local i, t = 0, {}
-	for filename in files do
+	for _,filename in ipairs(files) do
 		if filename ~= "." and filename ~= ".." then
 			i = i + 1
 			t[i] = filename
