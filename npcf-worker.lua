@@ -6,7 +6,7 @@ local BUILD_DISTANCE = 3
 local HOME_RANGE = 10
 
 townchest.npc = {}
-function townchest.npc.spawn_nearly(pos, owner)
+function townchest.npc.spawn_nearly(pos, chest, owner)
 	local npcid = tostring(math.random(10000))
 	npcf.index[npcid] = owner --owner
 	local ref = {
@@ -19,6 +19,7 @@ function townchest.npc.spawn_nearly(pos, owner)
 	local npc = npcf:add_npc(ref)
 	npcf:save(ref.id)
 	if npc then
+		npc.metadata.build_plan_id = minetest.pos_to_string(chest.pos)
 		npc:update()
 	end
 end

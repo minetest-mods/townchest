@@ -201,7 +201,7 @@ local _build_status = function(state)
 	-- spawn NPC button
 	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
 	spawn_bt:onClick(function(self, state, player)
-		townchest.npc.spawn_nearly(state.location.pos, player)
+		townchest.npc.spawn_nearly(state.location.pos, chest, player )
 	end)
 
 	-- update data each input
