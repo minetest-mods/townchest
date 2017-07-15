@@ -24,10 +24,10 @@ local _file_open_dialog = function(state)
 			for name, def in pairs(self._tabs) do
 				if name == tabname then
 					def.button:setBackground("default_gold_block.png")
-					def.view:setIsHidden(false)
+					def.view:setVisible(true)
 				else
 					def.button:setBackground(nil)
-					def.view:setIsHidden(true)
+					def.view:setVisible(false)
 				end
 			end
 			self.active_name = tabname
@@ -49,12 +49,12 @@ local _file_open_dialog = function(state)
 	tab1.button:onClick(function(self)
 		tab_controller:set_active("tab1")
 	end)
-	tab1.view = state:view(0,1,"tab1_view")
-	tab1.viewstate = tab1.view:getViewState()
+	tab1.view = state:container(0,1,"tab1_view")
+	tab1.viewstate = tab1.view:getContainerState()
 	-- file selection tab view state
 	tab1.viewstate:label(0,0,"header","Please select a building")
 	local listbox = tab1.viewstate:listbox(0,0.5,6,5.5,"fileslist")
-	for idx, file in ipairs(townchest.files.get()) do
+	for idx, file in ipairs(townchest.files_get()) do
 		listbox:addItem(file)
 	end
 	tab_controller:tab_add("tab1", tab1)
@@ -68,8 +68,8 @@ local _file_open_dialog = function(state)
 	tab2.button:onClick(function(self)
 		tab_controller:set_active("tab2")
 	end)
-	tab2.view = state:view(0,1,"tab2_view")
-	tab2.viewstate = tab2.view:getViewState()
+	tab2.view = state:container(0,1,"tab2_view")
+	tab2.viewstate = tab2.view:getContainerState()
 	-- Tasks tab view state
 	tab2.viewstate:label(0,0.2,"header","Build simple form")
 	local variant = tab2.viewstate:dropdown(3.5,0.2,4,0.5,"variant", 1)
@@ -174,21 +174,25 @@ local _build_status = function(state)
 	inst_tg:onToggle(function(self, state, player)
 		if self:getId() == 2 then
 			chest.info.instantbuild = true
+			chest.plan:set_status("build")
+			chest:run_async(chest.instant_build_chunk)
 		else
 			chest.info.instantbuild = false
 		end
 		set_dynamic_values()
 		chest:persist_info()
-		chest:run_async(chest.instant_build_chunk)
 	end)
 
 	-- NPC build button
 	local npc_tg = state:toggle(5,3,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
 	npc_tg:onToggle(function(self, state, player)
 		if self:getId() == 2 then
-			chest.info.npc_build = true      --is used by NPC
+			chest.info.npc_build = true
+			chest.plan:set_status("build")
+			townchest.npc.enable_build(chest.plan)
 		else
 			chest.info.npc_build = false
+			townchest.npc.disable_build(chest.plan)
 		end
 		set_dynamic_values()
 		chest:persist_info()
@@ -233,9 +237,9 @@ local _build_status = function(state)
 		end
 
 		if chest.info.npc_build == true or chest.info.instantbuild == true then
-			reload_bt:setIsHidden(true)
+			reload_bt:setVisible(false)
 		else
-			reload_bt:setIsHidden(false)
+			reload_bt:setVisible(true)
 		end
 	end
 

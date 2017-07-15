@@ -1,4 +1,6 @@
+--local dprint = townchest.dprint
 local dprint = townchest.dprint_off --debug
+
 local smartfs = townchest.smartfs
 
 local ASYNC_WAIT=0.2  -- schould be > 0 to restrict performance consumption
@@ -93,8 +95,9 @@ townchest.chest.new = function()
 	-- Create the task that should be managed by chest
 	--------------------------------------
 	function self.set_rawdata(self, taskname)
-
-		self.plan = townchest.plan.new(self)
+		self.plan = schemlib.plan.new(minetest.pos_to_string(self.pos), self.pos)
+		self.plan.chest = self
+		self.plan.on_status = townchest.npc.plan_update_hook
 
 		if taskname then
 			self.info.taskname = taskname
@@ -109,10 +112,9 @@ townchest.chest.new = function()
 				self:persist_info()
 				return
 			end
+			self.plan:read_from_schem_file(townchest.modpath.."/buildings/"..self.info.filename)
 
-			self.plan.data = townchest.files.readfile(self.info.filename)
-
-			if not self.plan.data then
+			if self.plan.data.nodecount == 0 then
 				self.infotext = "No building found in ".. self.info.filename
 				self:set_form("status")
 				self.current_stage = "select"
@@ -123,37 +125,33 @@ townchest.chest.new = function()
 			end
 
 		elseif self.info.taskname == "generate" then
-				self.plan.data = {}
-				self.plan.data.min_pos = { x=1, y=1, z=1 }
-				self.plan.data.max_pos = { x=self.info.genblock.x, y=self.info.genblock.y, z=self.info.genblock.z}
-				self.plan.data.nodecount = 0
-				self.plan.data.ground_y = 0
-				self.plan.data.nodenames = {}
-				self.plan.data.scm_data_cache = {}
-
+			-- set directly instead of counting each step
+			self.plan.data.min_pos = { x=1, y=1, z=1 }
+			self.plan.data.max_pos = { x=self.info.genblock.x, y=self.info.genblock.y, z=self.info.genblock.z}
+			self.plan.data.ground_y = 0
+			local filler_node = {name = "default:cobble"}
 			if self.info.genblock.variant == 1 then
 				-- nothing special, just let fill them with air
+
 			elseif self.info.genblock.variant == 2 then
-				table.insert(self.plan.data.nodenames, "default:cobble") -- index 1
 				-- Fill with stone
 				for x = 1, self.info.genblock.x do
 					for y = 1, self.info.genblock.y do
 						for z = 1, self.info.genblock.z do
-							self.plan:add_node({x=x,y=y,z=z, name_id = 1})
+							self.plan:add_node({x=x,y=y,z=z}, schemlib.node.new(filler_node))
 						end
 					end
 				end
 
 			elseif self.info.genblock.variant == 3 then
 				-- Build a box
-				table.insert(self.plan.data.nodenames, "default:cobble") -- index 1
 				for x = 1, self.info.genblock.x do
 					for y = 1, self.info.genblock.y do
 						for z = 1, self.info.genblock.z do
 							if x == 1 or x == self.info.genblock.x or
 									y == 1 or y == self.info.genblock.y or
 									z == 1 or z == self.info.genblock.z then
-								self.plan:add_node({x=x,y=y,z=z, name_id = 1})
+								self.plan:add_node({x=x,y=y,z=z}, schemlib.node.new(filler_node))
 							end
 						end
 					end
@@ -164,12 +162,11 @@ townchest.chest.new = function()
 
 			-- Build a plate
 			elseif self.info.genblock.variant == 4 then
-				table.insert(self.plan.data.nodenames, "default:cobble") -- index 1
 				local y = self.plan.data.min_pos.y
 				self.plan.data.max_pos.y = self.plan.data.min_pos.y
 				for x = 1, self.info.genblock.x do
 					for z = 1, self.info.genblock.z do
-						self.plan:add_node({x=x,y=y,z=z, name_id = 1})
+						self.plan:add_node({x=x,y=y,z=z}, schemlib.node.new(filler_node))
 					end
 				end
 				-- build ground level under chest
@@ -199,7 +196,6 @@ townchest.chest.new = function()
 				chest:run_async(func)
 			end
 		end
-
 		self:persist_info()
 		minetest.after(ASYNC_WAIT, async_call, self.pos)
 	end
@@ -208,124 +204,52 @@ townchest.chest.new = function()
 	-- Async task: Post-processing of plan preparation
 	--------------------------------------
 	function self.prepare_building_plan(self)
-		self.plan:flood_with_air()
-
-		-- self.plan:do_mapping() -- on demand called
+		self.plan:apply_flood_with_air(3, 0, 5) --(add_max, add_min, add_top)
+		self.plan:del_node(self.plan:get_plan_pos(self.pos)) -- Do not override the chest node
 		self.current_stage = "ready"
 		self:set_form("build_status")
-		self:run_async(self.instant_build_chunk) --just trigger, there is a check if active
+		if self.info.npc_build == true then
+			self.plan:set_status("build")
+			townchest.npc.enable_build(self.plan)
+		end
+		if self.info.instantbuild == true then
+			self.plan:set_status("build")
+			self:run_async(self.instant_build_chunk)
+		end
 	end
 
 	--------------------------------------
 	-- Async Task: Do a instant build step
 	--------------------------------------
 	function self.instant_build_chunk(self)
+		dprint("chunk processing called", self.info.instantbuild)
 		if not self.info.instantbuild == true then --instantbuild disabled
 			return
 		end
 		dprint("--- Instant build is running")
 
-		local startingpos = self.plan:get_random_node_pos()
-		if not startingpos then
+		local random_pos = self.plan:get_random_plan_pos()
+		if not random_pos then
 			self.info.instantbuild = false
 			return false
 		end
 
-		local chunk_pos = self.plan:get_world_pos(startingpos)
-		dprint("---build chunk", minetest.pos_to_string(startingpos))
+		dprint("---build chunk", minetest.pos_to_string(random_pos))
 
--- TODO: in customizing switchable implementation
---[[ --- implementation with VoxelArea - bad gameplay responsivity :( - back to per-node update
-		-- work on VoxelArea
-		local vm = minetest.get_voxel_manip()
-		local minp, maxp = vm:read_from_map(chunk_pos, chunk_pos)
-		local a = VoxelArea:new({MinEdge = minp, MaxEdge = maxp})
-		local data = vm:get_data()
-		local param2_data = vm:get_param2_data()
-		local light_fix = {}
-		local meta_fix = {}
---		for idx in a:iterp(vector.add(minp, 8), vector.subtract(maxp, 8)) do -- do not touch for beter light update
-		for idx, origdata in pairs(data) do -- do not touch for beter light update
-			local wpos = a:position(idx)
-			local pos = self.plan:get_plan_pos(wpos)
-			if wpos.x ~= self.pos.x or wpos.y ~= self.pos.y or wpos.z ~= self.pos.z then --skip chest pos
-				local node = self.plan:prepare_node_for_build(pos, wpos)
-				if node and node.content_id then
-					-- write to voxel
-					data[idx] = node.content_id
-					param2_data[idx] = node.param2
-
-					-- mark for light update
-					assert(node.node_def, dump(node))
-					if node.node_def.light_source and node.node_def.light_source > 0 then
-						table.insert(light_fix, {pos = wpos, node = node})
-					end
-					if node.meta then
-						table.insert(meta_fix, {pos = wpos, node = node})
-					end
-					self.plan:remove_node(node)
-				--TODO: metadata
-				end
-			end
-			self.plan:remove_node(pos) --if exists
-		end
-
-		-- store the changed map data
-		vm:set_data(data)
-		vm:set_param2_data(param2_data)
-		vm:calc_lighting()
-		vm:update_liquids()
-		vm:write_to_map()
-		vm:update_map()
-
-		-- fix the lights
-		dprint("fix lights", #light_fix)
-		for _, fix in ipairs(light_fix) do
-			minetest.env:add_node(fix.pos, fix.node)
-		end
-
-		dprint("process meta", #meta_fix)
-		for _, fix in ipairs(meta_fix) do
-			minetest.env:get_meta(fix.pos):from_table(fix.node.meta)
-		end
-]]
-
-		-- implementation using usual "add_node"
-		local chunk_nodes = self.plan:get_nodes_for_chunk(self.plan:get_plan_pos(chunk_pos))
-		dprint("Instant build of chunk: nodes:", #chunk_nodes)
-		for idx, nodeplan in ipairs(chunk_nodes) do
-			if nodeplan.wpos.x ~= self.pos.x or nodeplan.wpos.y ~= self.pos.y or nodeplan.wpos.z ~= self.pos.z then --skip chest pos
-				if nodeplan.node then
-					minetest.env:add_node(nodeplan.wpos, nodeplan.node)
-					if nodeplan.node.meta then
-						minetest.env:get_meta(nodeplan.wpos):from_table(nodeplan.node.meta)
-					end
-				end
-			end
-			self.plan:remove_node(nodeplan.pos)
-		end
-
+--		self.plan:do_add_chunk(random_pos)
+		self.plan:do_add_chunk_voxel(random_pos)
 		-- chunk done handle next chunk call
 		dprint("instant nodes left:", self.plan.data.nodecount)
-		self:update_info("build_status")
-		if self.plan.data.nodecount > 0 then
+		if self.plan:get_status() == "build" then
+			self:update_info("build_status")
 			--start next plan chain
 			return true
 		else
 			-- finished. disable processing
+			self.info.npc_build = false
 			self.info.instantbuild = false
+			self:update_info("build_status")
 			return false
-		end
-	end
-
-	--------------------------------------
-	-- Check if the chest is ready to build something
-	--------------------------------------
-	function self.npc_build_allowed(self)
-		if self.current_stage ~= "ready" then
-			return false
-		else
-			return self.info.npc_build
 		end
 	end
 

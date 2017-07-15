@@ -4,36 +4,34 @@ townchest.modpath = minetest.get_modpath(minetest.get_current_modname())
 
 
 -- debug. Used for debug messages. In production the function should be empty
-local dprint = function(...)
--- debug print. Comment out the next line if you don't need debug out
-	print(unpack(arg))
-end
-local dprint_off = function(...)
-end
+local dprint = print
+local dprint_off = function()end
 townchest.dprint = dprint
 townchest.dprint_off = dprint_off
 
 -- UI tools/ formspec
-townchest.smartfs = dofile(townchest.modpath.."/smartfs.lua")
+local smartfs =  dofile(townchest.modpath.."/smartfs.lua")
+townchest.smartfs = smartfs
 dofile(townchest.modpath.."/smartfs-forms.lua")
-
-local smartfs = townchest.smartfs
 
 -- The Chest
 dofile(townchest.modpath.."/chest.lua")
 
--- Reading building files (WorldEdit)
-townchest.files = dofile(townchest.modpath.."/files.lua")
-townchest.hsl = dofile(townchest.modpath.."/libs/hsl/init.lua")
-
--- Nodes mapping
-dofile(townchest.modpath.."/mapping.lua")
-
--- building plan
-dofile(townchest.modpath.."/plan.lua")
-
 -- NPC's
 dofile(townchest.modpath.."/npcf-worker.lua")
+
+
+-- Read the townchest building files
+function townchest.files_get()
+	local files = minetest.get_dir_list(townchest.modpath..'/buildings/', false) or {}
+	local i, t = 0, {}
+	for _,filename in ipairs(files) do
+		table.insert(t, filename)
+	end
+	table.sort(t,function(a,b) return a<b end)
+	return t
+end
+
 
 
 -----------------------------------------------
