@@ -80,9 +80,39 @@ local _file_open_dialog = function(state)
 
 	local field_x = tab2.viewstate:field(0,2,2,0.5,"x","width (x)")
 	local field_y = tab2.viewstate:field(2,2,2,0.5,"y","high (y)")
-	local field_z = tab2.viewstate:field(4,2,2,0.5,"z","width (y)")
+	local field_z = tab2.viewstate:field(4,2,2,0.5,"z","width (z)")
 
 	tab_controller:tab_add("tab2", tab2)
+
+-----------------------------------------------
+-- NPC control tab
+-----------------------------------------------
+	if minetest.global_exists("schemlib_builder_npcf") then
+		local tab3 = {}
+		tab3.button = state:button(4,0,2,1,"tab3_btn","NPC-Settings")
+		tab3.button:onClick(function(self)
+			tab_controller:set_active("tab3")
+		end)
+		tab3.view = state:container(0,1,"tab3_view")
+		tab3.viewstate = tab3.view:getContainerState()
+		-- file selection tab view state
+		tab3.viewstate:label(0,0,"header","Configure the NPC mod settings")
+		tab3.viewstate:label(0,0.5,"header2","0 = disabled, 1 = enabled >1 enabled with rarity")
+
+		local max_pause_duration = tab3.viewstate:field(1,2,2,0.5,"pause","Pause:",schemlib_builder_npcf.max_pause_duration)
+		max_pause_duration:setText(tostring(schemlib_builder_npcf.max_pause_duration))
+		local architect_rarity = tab3.viewstate:field(1,3,2,0.5,"arch","Own buildings creation:",schemlib_builder_npcf.architect_rarity)
+		architect_rarity:setText(tostring(schemlib_builder_npcf.architect_rarity))
+		local walk_around_rarity = tab3.viewstate:field(1,4,2,0.5,"walkaround","Walk around:",schemlib_builder_npcf.walk_around_rarity)
+		walk_around_rarity:setText(tostring(schemlib_builder_npcf.walk_around_rarity))
+		local apply_btn = tab3.viewstate:button(0,5,2,1,"apply","Apply")
+		apply_btn:onClick(function(self)
+			schemlib_builder_npcf.max_pause_duration = tonumber(max_pause_duration:getText()) or schemlib_builder_npcf.max_pause_duration
+			schemlib_builder_npcf.architect_rarity = tonumber(architect_rarity:getText()) or schemlib_builder_npcf.architect_rarity
+			schemlib_builder_npcf.walk_around_rarity = tonumber(walk_around_rarity:getText()) or schemlib_builder_npcf.walk_around_rarity
+		end)
+		tab_controller:tab_add("tab3", tab3)
+	end
 
 	--process all inputs
 	state:onInput(function(self, fields)
@@ -93,6 +123,7 @@ local _file_open_dialog = function(state)
 		chest.info.genblock.variant_name = variant:getSelectedItem()
 		chest:persist_info()
 	end)
+
 
 -- Run Button 
 	local runbutton = state:button(0,7.5,2,0.5,"load","Load")
