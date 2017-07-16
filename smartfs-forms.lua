@@ -163,12 +163,6 @@ local _build_status = function(state)
 	local l3 = state:label(1,1.5,"l3","set static at bottom")
 	local l4 = state:label(1,2.0,"l4","set static at bottom")
 
-	-- refresh building button
-	local reload_bt = state:button(5,4,3,0.5,"reload_bt", "Reload nodes")
-	reload_bt:onClick(function(self, state, player)
-		chest:set_rawdata(chest.info.taskname)
-	end)
-
 	--Instand build button
 	local inst_tg = state:toggle(1,3,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"})
 	inst_tg:onToggle(function(self, state, player)
@@ -183,26 +177,34 @@ local _build_status = function(state)
 		chest:persist_info()
 	end)
 
-	-- NPC build button
-	local npc_tg = state:toggle(5,3,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
-	npc_tg:onToggle(function(self, state, player)
-		if self:getId() == 2 then
-			chest.info.npc_build = true
-			chest.plan:set_status("build")
-			townchest.npc.enable_build(chest.plan)
-		else
-			chest.info.npc_build = false
-			townchest.npc.disable_build(chest.plan)
-		end
-		set_dynamic_values()
-		chest:persist_info()
+	-- refresh building button
+	local reload_bt = state:button(5,3,3,0.5,"reload_bt", "Reload nodes")
+	reload_bt:onClick(function(self, state, player)
+		chest:set_rawdata(chest.info.taskname)
 	end)
 
+	-- NPC build button
+	local npc_tg
+	if townchest.npc.supported then
+		npc_tg = state:toggle(1,4,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"})
+		npc_tg:onToggle(function(self, state, player)
+			if self:getId() == 2 then
+				chest.info.npc_build = true
+				chest.plan:set_status("build")
+				townchest.npc.enable_build(chest.plan)
+			else
+				chest.info.npc_build = false
+				townchest.npc.disable_build(chest.plan)
+			end
+			set_dynamic_values()
+			chest:persist_info()
+		end)
 	-- spawn NPC button
-	local spawn_bt = state:button(1,4,3,0.5,"spawn_bt", "Spawn NPC")
-	spawn_bt:onClick(function(self, state, player)
-		townchest.npc.spawn_nearly(state.location.pos, chest, player )
-	end)
+		local spawn_bt = state:button(5,4,3,0.5,"spawn_bt", "Spawn NPC")
+		spawn_bt:onClick(function(self, state, player)
+			townchest.npc.spawn_nearly(state.location.pos, chest, player )
+		end)
+	end
 
 	-- update data each input
 	state:onInput(function(self, fields)
@@ -223,13 +225,13 @@ local _build_status = function(state)
 	--update data on demand without rebuild the state
 	set_dynamic_values = function()
 		l4:setText("Nodes to do: "..chest.plan.data.nodecount)
-
-		if chest.info.npc_build == true then
-			npc_tg:setId(2)
-		else
-			npc_tg:setId(1)
+		if townchest.npc.supported then
+			if chest.info.npc_build == true then
+				npc_tg:setId(2)
+			else
+				npc_tg:setId(1)
+			end
 		end
-
 		if chest.info.instantbuild == true then
 			inst_tg:setId(2)
 		else
