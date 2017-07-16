@@ -3,7 +3,7 @@ local dprint = townchest.dprint_off --debug
 
 local smartfs = townchest.smartfs
 
-local ASYNC_WAIT=0.2  -- schould be > 0 to restrict performance consumption
+local ASYNC_WAIT=0.05  -- schould be > 0 to restrict performance consumption
 --------------------------------------
 -- class attributes and methods
 --------------------------------------
