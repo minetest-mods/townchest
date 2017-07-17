@@ -59,9 +59,9 @@ local __on_destruct = function(pos)
 	dprint("on_destruct")
 	-- remove all cached chest references
 	local key = minetest.pos_to_string(pos)
-	local plan = townchest.chest.list[key]
-	if plan then
-		townchest.npc.disable_build(plan)
+	local chest = townchest.chest.list[key]
+	if chest and chest.plan then
+		townchest.npc.disable_build(chest.plan)
 		townchest.chest.list[key] = nil --delete old reference
 	end
 end
