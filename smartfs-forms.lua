@@ -155,7 +155,7 @@ local _file_open_dialog = function(state)
 	--successfull build, update needed
 	return true
 end
-smartfs.create("file_open", _file_open_dialog)
+smartfs.create("townchest:file_open", _file_open_dialog)
 
 -----------------------------------------------
 -- Status dialog
@@ -170,7 +170,7 @@ local _status = function(state)
 	state:label(0,0,"info", chest.infotext)
 	return true --successfull build, update needed
 end
-smartfs.create("status", _status)
+smartfs.create("townchest:status", _status)
 
 -----------------------------------------------
 -- Building status dialog
@@ -280,4 +280,4 @@ local _build_status = function(state)
 	set_dynamic_values()
 	return true --successfull build, update needed
 end
-smartfs.create("build_status", _build_status)
+smartfs.create("townchest:build_status", _build_status)
