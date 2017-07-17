@@ -99,17 +99,20 @@ local _file_open_dialog = function(state)
 		tab3.viewstate:label(0,0,"header","Configure the NPC mod settings")
 		tab3.viewstate:label(0,0.5,"header2","0 = disabled, 1 = enabled >1 enabled with rarity")
 
-		local max_pause_duration = tab3.viewstate:field(1,2,2,0.5,"pause","Pause:",schemlib_builder_npcf.max_pause_duration)
+		local max_pause_duration = tab3.viewstate:field(1,2,2,0.5,"pause","Pause duratin in sec:")
 		max_pause_duration:setText(tostring(schemlib_builder_npcf.max_pause_duration))
-		local architect_rarity = tab3.viewstate:field(1,3,2,0.5,"arch","Own buildings creation:",schemlib_builder_npcf.architect_rarity)
+		local architect_rarity = tab3.viewstate:field(1,3,2,0.5,"arch","Own buildings creation:")
 		architect_rarity:setText(tostring(schemlib_builder_npcf.architect_rarity))
-		local walk_around_rarity = tab3.viewstate:field(1,4,2,0.5,"walkaround","Walk around:",schemlib_builder_npcf.walk_around_rarity)
+		local walk_around_rarity = tab3.viewstate:field(4,2,2,0.5,"walkaround","Walk direction change:")
 		walk_around_rarity:setText(tostring(schemlib_builder_npcf.walk_around_rarity))
+		local plan_max_distance = tab3.viewstate:field(4,3,2,0.5,"plan_distance","Max plan distance :")
+		plan_max_distance:setText(tostring(schemlib_builder_npcf.plan_max_distance))
 		local apply_btn = tab3.viewstate:button(0,5,2,1,"apply","Apply")
 		apply_btn:onClick(function(self)
 			schemlib_builder_npcf.max_pause_duration = tonumber(max_pause_duration:getText()) or schemlib_builder_npcf.max_pause_duration
 			schemlib_builder_npcf.architect_rarity = tonumber(architect_rarity:getText()) or schemlib_builder_npcf.architect_rarity
 			schemlib_builder_npcf.walk_around_rarity = tonumber(walk_around_rarity:getText()) or schemlib_builder_npcf.walk_around_rarity
+			schemlib_builder_npcf.plan_max_distance = tonumber(plan_max_distance:getText()) or schemlib_builder_npcf.plan_max_distance
 		end)
 		tab_controller:tab_add("tab3", tab3)
 	end

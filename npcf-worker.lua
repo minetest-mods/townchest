@@ -17,7 +17,6 @@ if minetest.global_exists("schemlib_builder_npcf") then
 	-- full control the NPC's
 	schemlib_builder_npcf.max_pause_duration = 0
 	schemlib_builder_npcf.architect_rarity = 0
-	schemlib_builder_npcf.walk_around_rarity = 0
 
 	function townchest.npc.spawn_nearly(pos, chest, owner)
 		local npcid = tostring(math.random(10000))
