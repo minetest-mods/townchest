@@ -38,19 +38,19 @@ if minetest.global_exists("schemlib_builder_npcf") then
 	end
 
 	function townchest.npc.enable_build(plan)
-			schemlib_builder_npcf.plan_manager:add(minetest.pos_to_string(plan.anchor_pos), plan)
+			schemlib_builder_npcf.plan_manager:add(plan)
 	end
 
 	function townchest.npc.disable_build(plan)
-		schemlib_builder_npcf.plan_manager:set_finished(minetest.pos_to_string(plan.anchor_pos))
+		schemlib_builder_npcf.plan_manager:set_finished(plan)
 	end
 
 	-- hook to trigger chest update each node placement
 	function townchest.npc.plan_update_hook(plan, status)
 		if plan.chest then
 			plan.chest:update_info("build_status")
+			dprint("hook called:", plan.plan_id, status)
 			if status == "finished" then
-				dprint("----Finished event called in npc hook----")
 				plan.chest.info.npc_build = false
 				plan.chest.info.instantbuild = false
 				townchest.npc.disable_build(plan)

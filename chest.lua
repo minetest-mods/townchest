@@ -204,7 +204,7 @@ townchest.chest.new = function()
 	-- Async task: Post-processing of plan preparation
 	--------------------------------------
 	function self.prepare_building_plan(self)
-		self.plan:apply_flood_with_air(3, 0, 5) --(add_max, add_min, add_top)
+		self.plan:apply_flood_with_air()
 		self.plan:del_node(self.plan:get_plan_pos(self.pos)) -- Do not override the chest node
 		self.current_stage = "ready"
 		self:set_form("build_status")
