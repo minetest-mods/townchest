@@ -49,7 +49,7 @@ end
 -----------------------------------------------
 local __on_construct = function(pos)
 	local chest = townchest.chest.create(pos) --create new chest utils instance
-	chest:set_form("file_open")
+	chest:set_form("plan")
 end
 
 -----------------------------------------------

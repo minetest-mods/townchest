@@ -62,7 +62,7 @@ townchest.chest.new = function()
 	--------------------------------------
 	function self.set_infotext(self, formname)
 		local infotext
-		if formname == "file_open" then
+		if formname == "plan" then
 			infotext = "please select a building"
 		elseif formname == "build_status" then
 			infotext = "Nodes in plan: "..self.plan.data.nodecount
@@ -107,7 +107,7 @@ townchest.chest.new = function()
 		-- check if file could be read
 			if not self.info.filename then
 				-- something wrong, back to file selection
-				minetest.after(0, self.set_form, self, "file_open")
+				minetest.after(0, self.set_form, self, "plan")
 				self.current_stage = "select"
 				self:persist_info()
 				return
@@ -120,7 +120,7 @@ townchest.chest.new = function()
 				self.current_stage = "select"
 				self.info.filename = nil
 				self:persist_info()
-				minetest.after(3, self.set_form, self, "file_open") --back to file selection
+				minetest.after(3, self.set_form, self, "plan") --back to plan selection
 				return
 			end
 
@@ -279,7 +279,7 @@ townchest.chest.new = function()
 			self:persist_info()
 			self:set_rawdata(chestinfo.taskname)
 		else
-			self:set_form("file_open")
+			self:set_form("plan")
 		end
 	end
 
