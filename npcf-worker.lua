@@ -15,7 +15,9 @@ if minetest.global_exists("schemlib_builder_npcf") then
 	-- TODO: Take over the buildings
 
 	-- full control the NPC's
+	schemlib_builder_npcf.max_pause_duration_bak = schemlib_builder_npcf.max_pause_duration
 	schemlib_builder_npcf.max_pause_duration = 0
+	schemlib_builder_npcf.architect_rarity_bak = schemlib_builder_npcf.architect_rarity
 	schemlib_builder_npcf.architect_rarity = 0
 
 	function townchest.npc.spawn_nearly(pos, chest, owner)
@@ -46,15 +48,13 @@ if minetest.global_exists("schemlib_builder_npcf") then
 
 	-- hook to trigger chest update each node placement
 	function townchest.npc.plan_update_hook(plan, status)
-		if plan.chest then
-			plan.chest:update_info("build_status")
+		if plan.chest and plan.chest.info.npc_build then
 			dprint("hook called:", plan.plan_id, status)
 			if status == "finished" then
-				plan.chest.info.npc_build = false
-				plan.chest.info.instantbuild = false
-				townchest.npc.disable_build(plan)
+				plan.chest:set_finished()
+			else
+				plan.chest:update_info()
 			end
-			plan.chest:update_statistics()
 		end
 	end
 end

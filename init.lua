@@ -49,7 +49,7 @@ end
 -----------------------------------------------
 local __on_construct = function(pos)
 	local chest = townchest.chest.create(pos) --create new chest utils instance
-	chest:set_form("plan")
+	chest:set_plan_form()
 end
 
 -----------------------------------------------
@@ -69,9 +69,9 @@ end
 -----------------------------------------------
 -- restore - called in lbm, restore chest internal data if the server was restarted
 -----------------------------------------------
+
 local __restore = function(pos, node)
-	local chest = townchest.chest.get(pos)
-	chest:restore()
+	local chest = townchest.chest.get(pos) --just get once to trigger restoral
 end
 
 -----------------------------------------------
@@ -150,6 +150,7 @@ minetest.register_abm({
 -----------------------------------------------
 -- register_lbm - restore all chestinfo
 -----------------------------------------------
+
 minetest.register_lbm({
 	name = "townchest:chest",
 	nodenames = {"townchest:chest"},

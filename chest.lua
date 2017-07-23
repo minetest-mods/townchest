@@ -16,20 +16,20 @@ townchest.chest = {
 		local self = nil
 		if townchest.chest.list[key] then
 			self = townchest.chest.list[key]
+			self.info = minetest.deserialize(self.meta:get_string("chestinfo")) or {}
 		else
 			self = townchest.chest.new()
 			self.key = key
 			self.pos = pos
 			self.meta = minetest.env:get_meta(pos) --just pointer
+			self.info = minetest.deserialize(self.meta:get_string("chestinfo")) or {}
+			if not self.info.anchor_pos then
+				self.info.anchor_pos = pos
+				self:persist_info()
+			end
 			townchest.chest.list[key] = self
+			self:restore()
 		end
-
-		-- update chest info
-		self.info = minetest.deserialize(self.meta:get_string("chestinfo")) --get add info
-		if not self.info then
-			self.info = {}
-		end
-
 		return self
 	end,
 	-- create - initial cleaned up chest after is placed
@@ -37,9 +37,10 @@ townchest.chest = {
 		local key = minetest.pos_to_string(pos)
 		dprint("clean key", key)
 		townchest.chest.list[key] = nil --delete old reference
+		minetest.env:get_meta(pos):set_string("chestinfo","")
 		local self = townchest.chest.get(pos)
-		self.info = nil
-		dprint("cleaned chest object", self)
+		self.info.stage = "select"
+		dprint("created chest object", self)
 		return self
 	end,
 }
@@ -58,37 +59,49 @@ townchest.chest.new = function()
 	end
 
 	--------------------------------------
-	-- set_infotext - Update node infotext
+	-- set_plan_form - set formspec to specific widget in plan processing chaing
 	--------------------------------------
-	function self.set_infotext(self, formname)
-		local infotext
-		if formname == "plan" then
-			infotext = "please select a building"
-		elseif formname == "build_status" then
-			infotext = "Nodes in plan: "..self.plan.data.nodecount
+	function self.set_plan_form(self)
+		self:persist_info()
+		if self.info.stage == "finished" then -- no updates if finished
+			smartfs.get("townchest:build_finished"):attach_to_node(self.pos)
+			self.meta:set_string("infotext", "Building finished")
+		elseif not self.plan then
+			smartfs.get("townchest:plan"):attach_to_node(self.pos)
+			self.meta:set_string("infotext", "please select a building plan")
+		elseif self.plan:get_status() == "new" then
+			smartfs.get("townchest:configure"):attach_to_node(self.pos)
+			self.meta:set_string("infotext", "Configure - Plan size:"..self.plan.data.nodecount)
 		else
-			infotext = self.infotext or ""
+			smartfs.get("townchest:build_status"):attach_to_node(self.pos)
+			self.meta:set_string("infotext", "Plan size:"..self.plan.data.nodecount)
 		end
-		self.meta:set_string("infotext", infotext)
 	end
 
 	--------------------------------------
-	-- set_form - set formspec to specific widget
+	-- Show message - set formspec to specific widget
 	--------------------------------------
-	function self.set_form(self, formname)
-		self:set_infotext(formname)
-		self:persist_info() -- the form read data from persistance handler
-		smartfs.get("townchest:"..formname):attach_to_node(self.pos)
+	function self.show_message(self, message)
+		self.infotext = message
+		self:persist_info()
+		smartfs.get("townchest:status"):attach_to_node(self.pos)
+		self.meta:set_string("infotext", message)
+		minetest.after(1.5, self.set_plan_form, self)
 	end
+
 
 	--------------------------------------
 	-- update informations on formspecs
 	--------------------------------------
-	function self.update_info(self, formname)
-		self:set_infotext(formname)
+	function self.update_info(self)
+		if self.info.stage == "ready" then
+			self.meta:set_string("infotext", "Build in process - nodes left:"..self.plan.data.nodecount)
+		elseif self.infotext then
+			self.meta:set_string("infotext", self.infotext)
+		end
 		self:persist_info()
-		-- send no data, but triger onInput
-		smartfs.nodemeta_on_receive_fields(self.pos, formname, {})
+		-- send no data / do not change form, but triger onInput to update fields
+		smartfs.nodemeta_on_receive_fields(self.pos, "", {})
 	end
 
 	--------------------------------------
@@ -98,31 +111,23 @@ townchest.chest.new = function()
 		self.plan = schemlib.plan.new(minetest.pos_to_string(self.pos), self.pos)
 		self.plan.chest = self
 		self.plan.on_status = townchest.npc.plan_update_hook
-
-		if taskname then
-			self.info.taskname = taskname
-		end
+		self.info.taskname = taskname or self.info.taskname
 
 		if self.info.taskname == "file" then
 		-- check if file could be read
 			if not self.info.filename then
 				-- something wrong, back to file selection
-				minetest.after(0, self.set_form, self, "plan")
-				self.current_stage = "select"
-				self:persist_info()
+				self:show_message("No file selected")
 				return
 			end
 			self.plan:read_from_schem_file(townchest.modpath.."/buildings/"..self.info.filename)
-
 			if self.plan.data.nodecount == 0 then
-				self.infotext = "No building found in ".. self.info.filename
-				self:set_form("status")
-				self.current_stage = "select"
-				self.info.filename = nil
 				self:persist_info()
-				minetest.after(3, self.set_form, self, "plan") --back to plan selection
+				self:show_message("No building found in ".. self.info.filename)
 				return
 			end
+			self.info.stage = self.restore_stage or "loaded" -- do not override the restoral stage
+			self:show_message("Building Plan loaded ".. self.info.filename)
 
 		elseif self.info.taskname == "generate" then
 			-- set directly instead of counting each step
@@ -172,12 +177,17 @@ townchest.chest.new = function()
 				-- build ground level under chest
 				self.plan.data.ground_y = 1
 			end
+			self.info.stage = self.restore_stage or "loaded"
+			self:show_message("Simple form loaded")
+		else
+			self:show_message("Unknown task")
 		end
 
--- TODO: go to customizing screen
-		self.infotext = "Build preparation"
-		self:set_form("status")
-		self:run_async(self.prepare_building_plan)
+		if not self.restore_stage or self.restore_stage == "loaded" then
+			self.restore_stage = nil
+		else
+			self:run_async(self.seal_building_plan)
+		end
 	end
 
 
@@ -201,21 +211,26 @@ townchest.chest.new = function()
 	end
 
 	--------------------------------------
-	-- Async task: Post-processing of plan preparation
+	-- Post-processing of plan preparation
 	--------------------------------------
-	function self.prepare_building_plan(self)
+	function self.seal_building_plan(self)
+		-- apply configuration to the building
+		if self.info.anchor_pos then
+			self.plan.anchor_pos = self.info.anchor_pos
+		end
+
 		self.plan:apply_flood_with_air()
 		self.plan:del_node(self.plan:get_plan_pos(self.pos)) -- Do not override the chest node
-		self.current_stage = "ready"
-		self:set_form("build_status")
+		self.info.stage = "ready"
+		self.restore_stage = nil
+		self.plan:set_status("build")
 		if self.info.npc_build == true then
-			self.plan:set_status("build")
 			townchest.npc.enable_build(self.plan)
 		end
 		if self.info.instantbuild == true then
-			self.plan:set_status("build")
 			self:run_async(self.instant_build_chunk)
 		end
+		self:set_plan_form()
 	end
 
 	--------------------------------------
@@ -241,21 +256,12 @@ townchest.chest.new = function()
 		-- chunk done handle next chunk call
 		dprint("instant nodes left:", self.plan.data.nodecount)
 		if self.plan:get_status() == "build" then
-			self:update_info("build_status")
+			self:update_info()
 			--start next plan chain
 			return true
 		else
-			-- finished. disable processing
-			self.info.npc_build = false
-			self.info.instantbuild = false
-			self:update_info("build_status")
+			self:set_finished()
 			return false
-		end
-	end
-
-	function self.update_statistics(self)
-		if self.current_stage == "ready" then --update building status in case of ready (or build in process after ready)
-			self:update_info("build_status")
 		end
 	end
 
@@ -263,24 +269,26 @@ townchest.chest.new = function()
 	-- restore chest state after shutdown (and maybe suspend if implemented)
 	--------------------------------------
 	function self.restore(self)
-		local chestinfo = minetest.deserialize(self.meta:get_string("chestinfo")) --get add info
-		if not chestinfo then
-			dprint("no chestinfo - asume the chest is removed")
-			return -- chest removed during the load
-		end
-		dprint("restoral info", dump(chestinfo))
-		if self.current_stage then
-			dprint("restoral not necessary, current stage is", self.current_stage)
-			return
-		end
-
-		if chestinfo.taskname then -- file selected but no plan. Restore the plan
-			self.current_stage = "restore"
+		dprint("restoral info", dump(self.info))
+		if self.info.stage and self.info.stage ~= "select"
+				and self.info.stage ~= "finished" then -- do not restore finished plans
+			self.restore_stage = self.info.stage
 			self:persist_info()
-			self:set_rawdata(chestinfo.taskname)
+			self:set_rawdata()
 		else
-			self:set_form("plan")
+			self:set_plan_form()
 		end
+	end
+
+	--------------------------------------
+	-- Disable all and set the plan finished
+	--------------------------------------
+	function self.set_finished(self)
+		self.info.stage = "finished"
+		self.info.npc_build = false
+		self.info.instantbuild = false
+		self:set_plan_form()
+		townchest.npc.disable_build(self.plan)
 	end
 
 	-- retrun the chest object in townchest.chest.new()
