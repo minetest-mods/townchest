@@ -37,6 +37,7 @@ function chest.get(pos)
 		if not self.info.chest_facedir then
 			local chestnode = minetest.get_node(pos)
 			self.info.chest_facedir = chestnode.param2
+			self.info.mirrored = false
 		end
 		townchest.chest.list[key] = self
 		self:restore()
@@ -234,7 +235,7 @@ function chest_class:seal_building_plan()
 	-- apply configuration to the building
 	self.plan.anchor_pos = self.info.anchor_pos
 	self.plan.facedir = self.info.chest_facedir
-
+	self.plan.mirrored = self.info.mirrored
 	self.plan:apply_flood_with_air()
 	self.plan:del_node(self.plan:get_plan_pos(self.pos)) -- Do not override the chest node
 	self.info.stage = "ready"

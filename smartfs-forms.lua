@@ -159,6 +159,7 @@ local function plan_statistics_widget(state)
 		state:label(1,3.0,"l4","Nodes in plan: "..chest.plan.data.nodecount)
 	end
 	state:label(1,3.5,"l5","Schemlib Anchor high: "..chest.info.anchor_pos.y)
+	state:label(1,4,"l6","Facedir: "..chest.info.chest_facedir.." Mirror:"..tostring(chest.info.mirrored))
 end
 
 -----------------------------------------------
@@ -174,12 +175,19 @@ local build_configuration_form = function(state)
 	end
 	plan_statistics_widget(state)
 
-	state:button(0,4.5,2,0.5,"go","Prepared"):onClick(function(self)
+	state:checkbox(6, 4, "ckb_mirror", "Mirror", chest.info.mirrored):onToggle(function(self,func)
+		chest.info.mirrored = self:getValue()
+		state:get("l6"):setText("Facedir: "..chest.info.chest_facedir.." Mirror:"..tostring(chest.info.mirrored))
+	end)
+
+	state:button(0,6,2,0.5,"go","Prepared"):onClick(function(self)
 		townchest.chest.get(state.location.pos):seal_building_plan()
 	end)
 
-	state:button(2,4.5,2,0.5,"anchor","Propose Anchor"):onClick(function(self)
+	state:button(2,6,2,0.5,"anchor","Propose Anchor"):onClick(function(self)
 		local chest = townchest.chest.get(state.location.pos)
+		chest.plan.facedir = chest.info.chest_facedir
+		chest.plan.mirrored = chest.info.mirrored
 		local pos, error = chest.plan:propose_anchor(state.location.pos)
 		if pos then
 			chest.info.anchor_pos = pos
@@ -232,7 +240,7 @@ local build_status_form = function(state)
 	end
 
 	-- instant build toggle
-	state:toggle(1,4.5,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"}):onToggle(function(self, state, player)
+	state:toggle(1,6,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"}):onToggle(function(self, state, player)
 		chest.info.instantbuild = not chest.info.instantbuild
 		if chest.info.instantbuild then
 			chest:run_async(chest.instant_build_chunk)
@@ -242,13 +250,13 @@ local build_status_form = function(state)
 	end)
 
 	-- refresh building button
-	state:button(5,4.5,3,0.5,"reload_bt", "Reload nodes"):onClick(function(self, state, player)
+	state:button(5,6,3,0.5,"reload_bt", "Reload nodes"):onClick(function(self, state, player)
 		chest:set_rawdata()
 	end)
 
 	-- NPC build button
 	if townchest.npc.supported then
-		state:toggle(9,4.5,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"}):onToggle(function(self, state, player)
+		state:toggle(9,6,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"}):onToggle(function(self, state, player)
 			chest.info.npc_build = not chest.info.npc_build
 			if chest.info.npc_build then
 				townchest.npc.enable_build(chest.plan)
