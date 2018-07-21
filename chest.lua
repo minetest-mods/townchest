@@ -128,7 +128,17 @@ end
 function chest_class:set_rawdata(taskname)
 	self.plan = schemlib.plan.new(minetest.pos_to_string(self.pos), self.pos)
 	self.plan.chest = self
-	self.plan.on_status = townchest.npc.plan_update_hook
+	self.plan.on_status = function(plan, status) -- hook to trigger chest update each node placement
+		if plan.chest then
+			dprint("hook called:", plan.plan_id, status)
+			if status == "finished" then
+				plan.chest:set_finished()
+			else
+				plan.chest:update_info()
+			end
+		end
+	end
+
 	self.info.taskname = taskname or self.info.taskname
 
 	if self.info.taskname == "file" then
@@ -245,41 +255,9 @@ function chest_class:seal_building_plan()
 		townchest.npc.enable_build(self.plan)
 	end
 	if self.info.instantbuild == true then
-		self:run_async(self.instant_build_chunk)
+		self.plan:do_add_all_voxel_async()
 	end
 	self:set_plan_form()
-end
-
---------------------------------------
--- Async Task: Do a instant build step
---------------------------------------
-function chest_class:instant_build_chunk()
-	dprint("chunk processing called", self.info.instantbuild)
-	if not self.info.instantbuild == true then --instantbuild disabled
-		return
-	end
-	dprint("--- Instant build is running")
-
-	local random_pos = self.plan:get_random_plan_pos()
-	if not random_pos then
-		self.info.instantbuild = false
-		return false
-	end
-
-	dprint("---build chunk", minetest.pos_to_string(random_pos))
-
---		self.plan:do_add_chunk(random_pos)
-	self.plan:do_add_chunk_voxel(random_pos)
-	-- chunk done handle next chunk call
-	dprint("instant nodes left:", self.plan.data.nodecount)
-	if self.plan:get_status() == "build" then
-		self:update_info()
-		--start next plan chain
-		return true
-	else
-		self:set_finished()
-		return false
-	end
 end
 
 --------------------------------------

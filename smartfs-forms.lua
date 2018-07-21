@@ -243,7 +243,10 @@ local build_status_form = function(state)
 	state:toggle(1,6,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"}):onToggle(function(self, state, player)
 		chest.info.instantbuild = not chest.info.instantbuild
 		if chest.info.instantbuild then
-			chest:run_async(chest.instant_build_chunk)
+			chest.plan:set_status("build")
+			chest.plan:do_add_all_voxel_async()
+		else
+			chest.plan:set_status("pause")
 		end
 		set_dynamic_values(state, chest)
 		chest:persist_info()
