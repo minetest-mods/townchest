@@ -3,11 +3,8 @@ local dprint = townchest.dprint_off --debug
 
 local function dummy_func() end
 townchest.npc = {
-	spawn_nearly = dummy_func,
-	enable_build = dummy_func,
-	disable_build = dummy_func,
+	spawn_nearly = dummy_func
 }
-
 
 if minetest.global_exists("schemlib_builder_npcf") then
 	townchest.npc.supported = true
@@ -36,13 +33,5 @@ if minetest.global_exists("schemlib_builder_npcf") then
 			npc.metadata.build_plan_id = minetest.pos_to_string(chest.pos)
 			npc:update()
 		end
-	end
-
-	function townchest.npc.enable_build(plan)
-			schemlib_builder_npcf.plan_manager:add(plan)
-	end
-
-	function townchest.npc.disable_build(plan)
-		schemlib_builder_npcf.plan_manager:set_finished(plan)
 	end
 end

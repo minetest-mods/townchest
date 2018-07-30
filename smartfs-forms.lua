@@ -9,11 +9,14 @@ townchest.specwidgets = {}
 local function allform_header(state)
 	state:size(16,10)
 	state:button(0,0,2,1,"allform_sel_plan", "Building Plan"):onClick(function(self)
-		townchest.chest.get(state.location.pos):set_plan_form()
+		local chest = townchest.chest.get(state.location.pos)
+		chest.info.ui_updates = true
+		chest:set_plan_form()
 	end)
 
 	if minetest.global_exists("schemlib_builder_npcf") then
 		state:button(2,0,2,1,"allform_sel_npc", "NPC / Builder"):onClick(function(self)
+			townchest.chest.get(state.location.pos).info.ui_updates = false
 			smartfs.get("townchest:npc_form"):attach_to_node(state.location.pos)
 		end)
 	end
@@ -104,7 +107,6 @@ local function plan_form(state)
 		chest.info.genblock.z = tonumber(state:get("z"):getText())
 		chest.info.genblock.variant = state:get("variant"):getSelected()
 		chest.info.genblock.variant_name = state:get("variant"):getSelectedItem()
-		chest:persist_info()
 	end)
 	tab_controller:tab_add("tab2", tab2)
 
@@ -112,12 +114,27 @@ local function plan_form(state)
 	state:button(0,8.5,2,0.5,"load","Load"):onClick(function(self)
 		local selected_tab = tab_controller:get_active_name()
 		if selected_tab == "tab1" then
-			chest.info.filename = state:get("tab1_view"):getContainerState():get("fileslist"):getSelectedItem()
-			if chest.info.filename then
-				chest:set_rawdata("file")
+			local filename = state:get("tab1_view"):getContainerState():get("fileslist"):getSelectedItem()
+			if not filename then
+				chest:show_message("Please select a file")
+				return
 			end
+			chest:run_async(function(chest)
+				chest.plan:read_from_schem_file(townchest.modpath.."/buildings/"..filename)
+				chest.info.townchest_filename = filename
+				if chest.info.nodecount == 0 then
+					chest:show_message("No building found in ".. filename)
+				else
+					chest:set_plan_form()
+				end
+			end)
+			chest:show_message("loading "..filename, false)
 		elseif selected_tab == "tab2" then
-			chest:set_rawdata("generate")
+			chest:run_async(function(chest)
+				chest:generate_simple_form()
+				chest:set_plan_form()
+			end)
+			chest:show_message("Build simple form", false)
 		end
 	end)
 
@@ -131,12 +148,9 @@ smartfs.create("townchest:plan", plan_form)
 -----------------------------------------------
 local function status_form(state)
 	local chest = townchest.chest.get(state.location.pos)
-	if not chest.infotext then
-		print("BUG: no infotext for status dialog!")
-		return false -- no update
-	end
+	local infotext = chest.meta:get_string("infotext")
 	state:size(7,1)
-	state:label(0,0,"info", chest.infotext)
+	state:label(0,0,"info", infotext)
 end
 smartfs.create("townchest:status", status_form)
 
@@ -146,10 +160,12 @@ local function plan_statistics_widget(state)
 	if chest.plan then
 		building_size = vector.add(vector.subtract(chest.plan.data.max_pos, chest.plan.data.min_pos),1)
 	end
-	if chest.info.taskname == "file" then
-		l1_text = "Building "..chest.info.filename.." selected"
-	elseif chest.info.taskname == "generate" then
+	if chest.info.townchest_filename then
+		l1_text = "Building "..chest.info.townchest_filename.." selected"
+	elseif chest.info.genblock and chest.info.genblock.variant_name then
 		l1_text = "Simple task: "..chest.info.genblock.variant_name
+	else
+		l1_text = "Unknown task"
 	end
 
 	state:label(1,1.5,"l1",l1_text)
@@ -159,7 +175,7 @@ local function plan_statistics_widget(state)
 		state:label(1,3.0,"l4","Nodes in plan: "..chest.plan.data.nodecount)
 	end
 	state:label(1,3.5,"l5","Schemlib Anchor high: "..chest.info.anchor_pos.y)
-	state:label(1,4,"l6","Facedir: "..chest.info.chest_facedir.." Mirror:"..tostring(chest.info.mirrored))
+	state:label(1,4,"l6","Facedir: "..chest.info.facedir.." Mirror:"..tostring(chest.info.mirrored))
 end
 
 -----------------------------------------------
@@ -177,24 +193,43 @@ local build_configuration_form = function(state)
 
 	state:checkbox(6, 4, "ckb_mirror", "Mirror", chest.info.mirrored):onToggle(function(self,func)
 		chest.info.mirrored = self:getValue()
-		state:get("l6"):setText("Facedir: "..chest.info.chest_facedir.." Mirror:"..tostring(chest.info.mirrored))
+		state:get("l6"):setText("Facedir: "..chest.info.facedir.." Mirror:"..tostring(chest.info.mirrored))
 	end)
 
-	state:button(0,6,2,0.5,"go","Prepared"):onClick(function(self)
-		townchest.chest.get(state.location.pos):seal_building_plan()
-	end)
-
-	state:button(2,6,2,0.5,"anchor","Propose Anchor"):onClick(function(self)
+	state:button(0,6,2,0.5,"flood_bt","Flood with air"):onClick(function(self)
 		local chest = townchest.chest.get(state.location.pos)
-		chest.plan.facedir = chest.info.chest_facedir
-		chest.plan.mirrored = chest.info.mirrored
-		local pos, error = chest.plan:propose_anchor(state.location.pos)
-		if pos then
-			chest.info.anchor_pos = pos
-			state:get("l5"):setText("Schemlib Anchor high: "..pos.y)
-		else
-			chest:show_message("Anchor could not be proposed")
-		end
+		chest:run_async(function(chest)
+			chest.plan:apply_flood_with_air()
+			chest:set_plan_form()
+		end)
+		chest:show_message("Flood building with air", false)
+	end)
+
+	state:button(2,6,2,0.5,"go_bt","Prepared"):onClick(function(self)
+		local chest = townchest.chest.get(state.location.pos)
+		chest.plan:set_status("pause")
+		chest.plan:del_node(chest.plan:get_plan_pos(state.location.pos))
+		chest:run_async(function(chest)
+			schemlib.plan_manager.set_plan(chest.plan)
+			chest:set_plan_form()
+		end)
+		chest:show_message("Save data before run", false)
+		chest.info.ui_updates = true
+		chest:set_plan_form()
+	end)
+
+	state:button(4,6,2,0.5,"anchor_bt","Propose Anchor"):onClick(function(self)
+		local chest = townchest.chest.get(state.location.pos)
+		chest:run_async(function(chest)
+			local pos, error = chest.plan:propose_anchor(state.location.pos)
+			if pos then
+				chest.info.anchor_pos = pos
+				state:get("l5"):setText("Schemlib Anchor high: "..pos.y)
+			else
+				chest:show_message("Anchor could not be proposed")
+			end
+		end)
+		chest:show_message("Check Anchor size", false)
 	end)
 
 end
@@ -216,9 +251,7 @@ local build_status_form = function(state)
 
 	-- set dynamic values after actions
 	local function set_dynamic_values(state, chest)
-
 		state:get("l4"):setText("Nodes left: "..chest.plan.data.nodecount)
-
 		if townchest.npc.supported then
 			if chest.info.npc_build == true then
 				state:get("npc_tg"):setId(2)
@@ -226,48 +259,45 @@ local build_status_form = function(state)
 				state:get("npc_tg"):setId(1)
 			end
 		end
-		if chest.info.instantbuild == true then
+		local status = chest.plan:get_status()
+		if status == "build" then
 			state:get("inst_tg"):setId(2)
 		else
 			state:get("inst_tg"):setId(1)
 		end
-
-		if chest.info.npc_build == true or chest.info.instantbuild == true then
-			state:get("reload_bt"):setVisible(false)
+		if chest.info.npc_build or status == "build" then
+			state:get("reset_bt"):setVisible(false)
 		else
-			state:get("reload_bt"):setVisible(true)
+			state:get("reset_bt"):setVisible(true)
 		end
 	end
 
 	-- instant build toggle
 	state:toggle(1,6,3,0.5,"inst_tg",{ "Start instant build", "Stop instant build"}):onToggle(function(self, state, player)
-		chest.info.instantbuild = not chest.info.instantbuild
-		if chest.info.instantbuild then
+		local status = chest.plan:get_status()
+		if status ~= "build" then
 			chest.plan:set_status("build")
-			chest.plan:do_add_all_voxel_async()
+			chest:update_info()
 		else
 			chest.plan:set_status("pause")
+			chest:update_info()
 		end
+		schemlib.plan_manager.set_plan(chest.plan)
 		set_dynamic_values(state, chest)
-		chest:persist_info()
 	end)
 
 	-- refresh building button
-	state:button(5,6,3,0.5,"reload_bt", "Reload nodes"):onClick(function(self, state, player)
-		chest:set_rawdata()
+	state:button(5,6,3,0.5,"reset_bt", "Reset"):onClick(function(self, state, player)
+		local chest = townchest.chest.create(state.location.pos)
+		chest:set_plan_form()
 	end)
 
 	-- NPC build button
 	if townchest.npc.supported then
 		state:toggle(9,6,3,0.5,"npc_tg",{ "Start NPC build", "Stop NPC build"}):onToggle(function(self, state, player)
 			chest.info.npc_build = not chest.info.npc_build
-			if chest.info.npc_build then
-				townchest.npc.enable_build(chest.plan)
-			else
-				townchest.npc.disable_build(chest.plan)
-			end
+			chest:update_info()
 			set_dynamic_values(state, chest)
-			chest:persist_info()
 		end)
 	end
 
@@ -290,17 +320,18 @@ local build_finished_form = function(state)
 	local chest = townchest.chest.get(state.location.pos)
 	allform_header(state)
 	local l1_text
-	if chest.info.taskname == "file" then
-		l1_text = "Building "..chest.info.filename.." selected"
-	elseif chest.info.taskname == "generate" then
-		l1_text = "Simple task: "..chest.info.genblock.variant_name
+	if chest.info.townchest_filename then
+		l1_text = "Building "..chest.info.townchest_filename.." finished"
+	elseif chest.info.genblock and chest.info.genblock.variant_name then
+		l1_text = "Simple task: "..chest.info.genblock.variant_name.." finished"
+	else
+		l1_text = "Unknown task finished"
 	end
-
 	state:label(1,1.5,"l1",l1_text)
 
-	-- refresh building button
-	state:button(5,4.5,3,0.5,"reload_bt", "Reload nodes"):onClick(function(self, state, player)
-		chest:set_rawdata()
+	state:button(5,6,3,0.5,"reset_bt", "Reset"):onClick(function(self, state, player)
+		local chest = townchest.chest.create(state.location.pos)
+		chest:set_plan_form()
 	end)
 end
 smartfs.create("townchest:build_finished", build_finished_form)
