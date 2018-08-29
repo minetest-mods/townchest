@@ -117,6 +117,7 @@ minetest.register_node("townchest:chest", {
 	allow_metadata_inventory_take = __allow_metadata_inventory_take,
 })
 
+--[[
 -----------------------------------------------
 -- register craft recipe for the chest
 -----------------------------------------------
@@ -128,6 +129,6 @@ minetest.register_craft({
 		{'default:mese_crystal', 'default:chest_locked', 'default:mese_crystal'},
 	}
 })
-
+]]
 -- log that we started
 minetest.log("action", "[MOD]"..minetest.get_current_modname().." -- loaded from "..townchest.modpath)
