@@ -64,7 +64,8 @@ The mod uses the schemlib framework to handle the buildings
 - Nanuk - contributed buildings (towntest) 
 - irksomeduck - contributed buildings (towntest)
 - AMMOnym_coloseum.we https://forum.minetest.net/viewtopic.php?p=121294#p121294
-- PEAK_BremerHaus.we  https://forum.minetest.net/viewtopic.php?p=207103#p207103
+- PEAK_BremerHaus.we https://forum.minetest.net/viewtopic.php?p=207103#p207103
+- StarNinjas_arrownaturetower.we https://forum.minetest.net/viewtopic.php?f=9&t=15704&p=329587#p329589
 
 - All contributions welcome!
 
